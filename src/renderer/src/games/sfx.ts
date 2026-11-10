@@ -65,6 +65,24 @@ export class Sfx {
     src.start()
   }
 
+  /** A low thud for getting hit: a falling tone plus a little noise. */
+  thud(): void {
+    const a = this.audio()
+    if (!a) return
+    const { ctx, out } = a
+    const t0 = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const g = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(180, t0)
+    osc.frequency.exponentialRampToValueAtTime(45, t0 + 0.3)
+    g.gain.setValueAtTime(0.9, t0)
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35)
+    osc.connect(g).connect(out)
+    osc.start(t0)
+    osc.stop(t0 + 0.4)
+  }
+
   /** Rising three-note flourish for a multi-slice bonus. */
   bonus(): void {
     ;[660, 880, 1320].forEach((f, i) => this.tone(f, i * 0.06, 0.14, 'triangle', 0.4))

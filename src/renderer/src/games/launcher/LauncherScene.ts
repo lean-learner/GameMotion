@@ -54,11 +54,11 @@ export class LauncherScene extends Phaser.Scene {
       .text(W / 2, 118, '', { fontFamily: FONT, fontSize: '24px', color: '#cfe8ff' })
       .setOrigin(0.5)
     this.scoresText = this.add
-      .text(W * 0.62, 0, '', {
+      .text(W * 0.74, 0, '', {
         fontFamily: FONT,
-        fontSize: '24px',
+        fontSize: '20px',
         color: '#ffffff',
-        lineSpacing: 8
+        lineSpacing: 4
       })
       .setStroke('#0b1d33', 4)
     this.buttons = new DwellButtons(this, { dwellMs: 1000, fontSize: 30 })
@@ -211,20 +211,17 @@ export class LauncherScene extends Phaser.Scene {
     }
     this.buttons.set([...mode, ...players, ...games, settings, reach])
 
-    // Top scores for the first game (more panels when there are more games).
-    const first = this.services.games[0]
-    const rowsText = first ? this.services.topScores(tableFor(first.id, count)).slice(0, 5) : []
-    this.scoresText
-      .setY(H * (gamesY - 0.01))
-      .setText(
-        first
-          ? [
-              `${first.title}${count > 1 ? ' Versus' : ''} top scores`,
-              ...(rowsText.length
-                ? rowsText.map((r, i) => `${i + 1}.  ${r.name}  ${r.score}`)
-                : ['No scores yet'])
-            ].join('\n')
-          : ''
-      )
+    // Top 3 for every game, for the current mode.
+    const lines = this.services.games.flatMap((g) => {
+      const rows = this.services.topScores(tableFor(g.id, count)).slice(0, 3)
+      return [
+        `${g.title}${count > 1 ? ' Versus' : ''}`,
+        ...(rows.length
+          ? rows.map((r, i) => `   ${i + 1}.  ${r.name}  ${r.score}`)
+          : ['   No scores yet']),
+        ''
+      ]
+    })
+    this.scoresText.setY(H * (gamesY - 0.04)).setText(['Top scores', ...lines].join('\n'))
   }
 }

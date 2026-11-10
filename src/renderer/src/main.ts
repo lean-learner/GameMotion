@@ -6,6 +6,7 @@ import type { InputEvent, MotionSnapshot, Vec2 } from './input/types'
 import { describe, InputOverlay } from './overlay/InputOverlay'
 import { GuidedTest } from './testrun/GuidedTest'
 import { balloonPop } from './games/balloonPop'
+import { meteorDodge } from './games/meteorDodge'
 import { mountLauncher } from './games/launcher'
 import { mountReachSetup } from './games/reachSetup'
 import { validReach } from './input/reach'
@@ -93,7 +94,7 @@ const eventLog: { event: InputEvent; at: number }[] = []
 let rafHandle: number | null = null
 
 // ---- Shell: launcher, games, settings (Milestones 3-4) ---------------------------
-const GAMES: GameModule[] = [balloonPop]
+const GAMES: GameModule[] = [balloonPop, meteorDodge]
 type Mode = 'settings' | 'launcher' | 'game'
 let mode: Mode = 'settings'
 let unmount: (() => void) | null = null
@@ -822,8 +823,9 @@ if (params.get('hold') === '0') ui.holdFps.checked = false
 if (params.get('brighten') === '0') ui.brighten.checked = false
 tracker.setMaxHz(Number(ui.maxHz.value))
 if (params.get('players') === '2') playerCount = 2
-if (params.has('autostart') && params.get('game') === 'balloon-pop') {
-  void enterGame(balloonPop, { autostart: params.has('play') })
+const selfTestGame = GAMES.find((g) => g.id === params.get('game'))
+if (params.has('autostart') && selfTestGame) {
+  void enterGame(selfTestGame, { autostart: params.has('play') })
 } else if (params.has('autostart') && params.has('reach')) {
   void enterLauncher().then(() => launcherServices.openReachSetup())
 } else if (params.has('autostart') && params.has('launcher')) {

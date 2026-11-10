@@ -7,7 +7,8 @@ swipes, crouch, lean, calibration and dwell selection. Milestone 3 adds the firs
 game, **Balloon Pop**, built with Phaser 4. Milestone 4 makes it a platform: a
 gesture-driven launcher, player slots with saved high scores, settings, optional
 start-on-login, and a packaged offline AppImage. Milestone 5 adds two-player mode
-(Balloon Pop Versus) with split-view tracking.
+(Balloon Pop Versus) with split-view tracking. Since then: slicing feel for Balloon Pop,
+per-player **Reach setup**, and a second game, **Meteor Dodge** (lean and crouch).
 No cloud services: models and WASM ship with the app, and all non-local network
 requests are blocked at runtime.
 
@@ -362,8 +363,44 @@ the frame.
 - **Lean events are debounced** (a direction must hold 100 ms), so a body jittering near
   the threshold can't fire a stream of events. The continuous lean value isn't delayed.
 
+## After the milestones
+
+### Balloon Pop: slicing feel
+
+- **Blade trails:** each hand leaves a glowing, tapering trail (170 ms), drawn at display
+  rate. It's bright while the hand is fast enough to slice.
+- **Split halves:** a popped balloon splits along the swipe direction, and the halves fly
+  apart and fall.
+- **Multi-slice bonus:** popping 3 or more balloons in one continuous stroke adds 10 points
+  per balloon ("3x slice!"). A stroke starts when the hand gets fast enough (swoosh sound)
+  and ends when it slows down.
+
+### Reach setup (per player)
+
+Launcher → **Reach setup**. Each player traces big circles with the right hand, then the
+left (8 s each; in 2-player mode both players at once). The area their hands covered
+(95th percentile, shrunk 10 % for comfort, clamped to sane limits) becomes their cursor
+reach zone. It's saved per player slot and used whenever that player plays
+(`input/reach.ts`, `games/reachSetup/`).
+
+### Meteor Dodge (second game)
+
+**Lean** left or right to move your avatar; **crouch** to duck under laser beams (a
+flashing warning stripe shows where they'll sweep, 1 s ahead). Dodge falling meteors,
+catch stars (+50), 3 lives. Points accrue for every second survived, and it speeds up
+over 90 s. Uses the upper-body crouch and lean detectors, so it works with the C270's
+narrow view. The avatar follows you on the menu, so you can try the controls first.
+Versus: two avatars in player colours; the higher score wins. Scores go to
+`meteor-dodge` / `meteor-dodge-2p`. Hands are only used for menus and the pause button.
+
+### Auto-pause fix
+
+Auto-pause now needs positive evidence (tracking says the shoulders aren't visible). Old
+data no longer counts as the player leaving: a roughly 1-second stall on the first run
+after a fresh build was intermittently pausing games.
+
 ## Next milestone
 
-All five planned milestones are built. Worth doing next, with live tests: try Versus with
-two people (framing with the C270), tune cursor reach from a guided-test report, compare
-the Full and Heavy pose models, and add more games (cooperative modes fit the same API).
+All five planned milestones are built, plus the extras above. Still needed with real
+players: swipe speed (`MIN_POP_SPEED`), Meteor Dodge difficulty, Versus framing with
+two people on the C270, and Full vs Heavy pose models.
