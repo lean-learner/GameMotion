@@ -7,7 +7,16 @@ import { describe, InputOverlay } from './overlay/InputOverlay'
 import { GuidedTest } from './testrun/GuidedTest'
 import { balloonPop } from './games/balloonPop'
 import { mountLauncher } from './games/launcher'
-import type { GameModule, GameServices, LauncherServices, Player, ScoreRow } from './games/types'
+import { mountReachSetup } from './games/reachSetup'
+import { validReach } from './input/reach'
+import type {
+  GameModule,
+  GameServices,
+  LauncherServices,
+  Player,
+  ScoreRow,
+  SetupServices
+} from './games/types'
 import type { StoreView } from '../../preload/index.d'
 import { CameraService, type CameraSettings } from './camera/CameraService'
 import { OverlayRenderer } from './overlay/OverlayRenderer'
@@ -163,6 +172,30 @@ const gameServices: GameServices = {
   exit: () => void enterLauncher()
 }
 
+/** Gives each player's MotionInput the reach zone saved for their slot (Reach setup). */
+function applyReach(): void {
+  sessionPlayers().forEach((p, i) => {
+    motions[i]?.setReach(validReach(storeView?.slots[p.slot]?.reach))
+  })
+}
+
+const setupServices: SetupServices = {
+  ...gameServices,
+  handRelative: (player, side) => motions[player]?.handRelative(side) ?? null,
+  saveReach: async (player, zone) => {
+    try {
+      const slot = sessionPlayers()[player]?.slot
+      if (slot === undefined) return false
+      storeView = await window.gameMotion.store.setReach(slot, zone)
+      applyReach()
+      return true
+    } catch (err) {
+      console.error('[store] could not save reach:', err)
+      return false
+    }
+  }
+}
+
 const launcherServices: LauncherServices = {
   ...gameServices,
   games: GAMES.map((g) => ({ id: g.id, title: g.title })),
@@ -170,10 +203,12 @@ const launcherServices: LauncherServices = {
   setPlayer: async (slot, right = false) => {
     if (right) {
       secondSlot = slot
+      applyReach()
       return
     }
     storeView = await window.gameMotion.store.setActiveSlot(slot)
     if (secondSlot === slot) secondSlot = null
+    applyReach()
   },
   playerCount: () => playerCount,
   setPlayerCount: (count) => setPlayerCount(count),
@@ -183,6 +218,8 @@ const launcherServices: LauncherServices = {
     if (game) void enterGame(game)
   },
   openSettings: () => enterSettings(),
+  openReachSetup: () =>
+    void mountFullscreen('game', () => mountReachSetup(ui.gameRoot, setupServices), 'reach setup'),
   quit: () => void window.gameMotion.quit()
 }
 
@@ -198,6 +235,7 @@ async function setPlayerCount(count: number): Promise<void> {
     tracker.stop()
     await tracker.load(readConfig())
     startInput(cameraSettings.width / cameraSettings.height) // fresh per-player input
+    applyReach()
     tracker.start(ui.video)
   } else {
     playerTracker = new PlayerTracker(count, motion.aspect)
@@ -226,6 +264,7 @@ async function mountFullscreen(
     return false
   }
   mode = next
+  applyReach()
   document.body.classList.add('game-mode')
   ui.gameRoot.hidden = false
   try {
@@ -275,6 +314,7 @@ async function renderSettings(): Promise<void> {
     console.warn('[store] unavailable:', err)
     return
   }
+  applyReach()
   ui.startFullscreen.checked = storeView.settings.startFullscreen
   ui.autostart.checked = storeView.autostart
   ui.playerNames.replaceChildren(
@@ -784,6 +824,8 @@ tracker.setMaxHz(Number(ui.maxHz.value))
 if (params.get('players') === '2') playerCount = 2
 if (params.has('autostart') && params.get('game') === 'balloon-pop') {
   void enterGame(balloonPop, { autostart: params.has('play') })
+} else if (params.has('autostart') && params.has('reach')) {
+  void enterLauncher().then(() => launcherServices.openReachSetup())
 } else if (params.has('autostart') && params.has('launcher')) {
   void enterLauncher()
 } else if (params.has('autostart') && params.has('guided')) {

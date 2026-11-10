@@ -44,6 +44,17 @@ export interface GameServices {
   exit(): void
 }
 
+/** Extra services for Reach setup. */
+export interface SetupServices extends GameServices {
+  /** A player's hand relative to its shoulder, in shoulder widths (null if not seen). */
+  handRelative(player: number, side: Side): { out: number; down: number } | null
+  /** Saves a player's fitted reach zone and starts using it. */
+  saveReach(
+    player: number,
+    zone: { inward: number; outward: number; up: number; down: number }
+  ): Promise<boolean>
+}
+
 /** Extra services for the launcher. */
 export interface LauncherServices extends GameServices {
   games: { id: string; title: string }[]
@@ -57,6 +68,7 @@ export interface LauncherServices extends GameServices {
   topScores(gameId: string): ScoreRow[]
   launch(gameId: string): void
   openSettings(): void
+  openReachSetup(): void
   quit(): void
 }
 

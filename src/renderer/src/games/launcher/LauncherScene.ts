@@ -124,6 +124,8 @@ export class LauncherScene extends Phaser.Scene {
       this.services.launch(id.slice(5))
     } else if (id === 'settings') {
       this.services.openSettings()
+    } else if (id === 'reach') {
+      this.services.openReachSetup()
     } else if (id === 'exit') {
       this.services.quit()
     }
@@ -198,7 +200,16 @@ export class LauncherScene extends Phaser.Scene {
       w: 0.16,
       h: 0.1
     }
-    this.buttons.set([...mode, ...players, ...games, settings])
+    const reach: Button = {
+      id: 'reach',
+      label: 'Reach setup',
+      sub: 'fit cursors to your arms',
+      x: 0.24,
+      y: 0.86,
+      w: 0.22,
+      h: 0.1
+    }
+    this.buttons.set([...mode, ...players, ...games, settings, reach])
 
     // Top scores for the first game (more panels when there are more games).
     const first = this.services.games[0]

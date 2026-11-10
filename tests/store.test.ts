@@ -8,7 +8,7 @@ import {
   isAutostartEnabled,
   setAutostart
 } from '../src/main/autostart'
-import { addScore, cleanName, defaultData, sanitize, Store } from '../src/main/store'
+import { addScore, cleanName, cleanReach, defaultData, sanitize, Store } from '../src/main/store'
 
 const day = '2026-11-10T00:00:00.000Z'
 
@@ -70,6 +70,19 @@ describe('data file', () => {
     expect(d.scores['balloon-pop']).toEqual([{ slot: 1, score: 5, date: day }])
     expect(d.scores['../x']).toBeUndefined()
     expect(d.settings.startFullscreen).toBe(false)
+  })
+
+  it('keeps valid reach zones and drops broken ones', () => {
+    const reach = { inward: 0.5, outward: 1.4, up: 0.8, down: 0.7 }
+    const d = sanitize({
+      slots: [
+        { id: 0, name: 'A', reach },
+        { id: 1, name: 'B', reach: { inward: 99 } }
+      ]
+    })
+    expect(d.slots[0].reach).toEqual(reach)
+    expect(d.slots[1].reach).toBeUndefined()
+    expect(cleanReach({ ...reach, down: -1 })).toBeNull()
   })
 
   it('saves atomically and reloads', () => {

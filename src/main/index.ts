@@ -6,7 +6,7 @@ import icon from '../../resources/icon.png?asset'
 import { resolveAppPath, mimeFor, originOf, APP_SCHEME, APP_HOST } from './appProtocol'
 import { setupSelfTest } from './selfTest'
 import { CameraTuning } from './cameraTuning'
-import { addScore, cleanName, Store } from './store'
+import { addScore, cleanName, cleanReach, Store } from './store'
 import { isAutostartEnabled, setAutostart } from './autostart'
 
 // Serve the production renderer from a privileged custom scheme instead of
@@ -194,6 +194,23 @@ function registerStoreIpc(): void {
     store.update((d) => ({
       ...d,
       slots: d.slots.map((s) => (s.id === slot ? { ...s, name: cleanName(name) } : s))
+    }))
+    return view()
+  })
+  ipcMain.handle('store:set-reach', (e, slot: unknown, reach: unknown) => {
+    guard(e)
+    if (!Number.isInteger(slot) || !store.data.slots[slot as number])
+      throw new Error('invalid slot')
+    const clean = reach === null ? null : cleanReach(reach)
+    if (reach !== null && !clean) throw new Error('invalid reach')
+    store.update((d) => ({
+      ...d,
+      slots: d.slots.map((s) => {
+        if (s.id !== slot) return s
+        const next = { ...s, reach: clean ?? undefined }
+        if (!clean) delete next.reach
+        return next
+      })
     }))
     return view()
   })

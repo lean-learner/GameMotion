@@ -5,10 +5,38 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
  * (~/.config/gamemotion/gamemotion-data.json). Main process only; the page
  * reaches it through narrow, validated IPC calls.
  */
+/** A player's fitted cursor reach (shoulder widths); see renderer input/reach.ts. */
+export interface Reach {
+  inward: number
+  outward: number
+  up: number
+  down: number
+}
+
 export interface Slot {
   id: number
   name: string
   color: string
+  reach?: Reach
+}
+
+const REACH_LIMITS: Record<keyof Reach, [number, number]> = {
+  inward: [0.2, 1.6],
+  outward: [0.5, 2.5],
+  up: [0.3, 2.0],
+  down: [0.3, 1.6]
+}
+
+/** A valid reach zone, or null. */
+export function cleanReach(r: unknown): Reach | null {
+  if (!r || typeof r !== 'object') return null
+  const out = {} as Reach
+  for (const [k, [lo, hi]] of Object.entries(REACH_LIMITS) as [keyof Reach, [number, number]][]) {
+    const v = (r as Record<string, unknown>)[k]
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < lo || v > hi) return null
+    out[k] = v
+  }
+  return out
 }
 
 export interface ScoreEntry {
@@ -62,6 +90,8 @@ export function sanitize(raw: unknown): StoreData {
     for (const s of r.slots) {
       if (s && Number.isInteger(s.id) && d.slots[s.id] && typeof s.name === 'string') {
         d.slots[s.id].name = cleanName(s.name) || d.slots[s.id].name
+        const reach = cleanReach(s.reach)
+        if (reach) d.slots[s.id].reach = reach
       }
     }
   }

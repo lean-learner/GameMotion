@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('gameMotion', {
     get: () => ipcRenderer.invoke('store:get'),
     setActiveSlot: (slot: number) => ipcRenderer.invoke('store:set-active-slot', slot),
     renameSlot: (slot: number, name: string) => ipcRenderer.invoke('store:rename-slot', slot, name),
+    setReach: (slot: number, reach: unknown) => ipcRenderer.invoke('store:set-reach', slot, reach),
     recordScore: (game: string, score: number, slot?: number) =>
       ipcRenderer.invoke('store:record-score', game, score, slot),
     setSettings: (change: { startFullscreen?: boolean; autostart?: boolean }) =>

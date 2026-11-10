@@ -1,7 +1,7 @@
 import type { TrackingFrame } from '../tracking/types'
 import { measureBody } from './body'
 import { Calibrator, type Calibration } from './calibration'
-import { CursorTracker } from './cursor'
+import { CursorTracker, DEFAULT_REACH, type HandRelative, type ReachZone } from './cursor'
 import { PostureDetector } from './posture'
 import { SwipeDetector } from './swipe'
 import type { InputEvent, MotionSnapshot, Side, Vec2 } from './types'
@@ -67,6 +67,16 @@ export class MotionInput {
   /** Cursor position extrapolated to `now`, for drawing at display rate. */
   predictCursor(side: Side, now: number): Vec2 | null {
     return this.cursors[side].predict(now)
+  }
+
+  /** Uses a player's own reach zone (from Reach setup); null restores the default. */
+  setReach(zone: ReachZone | null): void {
+    for (const side of ['left', 'right'] as const) this.cursors[side].zone = zone ?? DEFAULT_REACH
+  }
+
+  /** A hand's position relative to its shoulder, in shoulder widths (for Reach setup). */
+  handRelative(side: Side): HandRelative | null {
+    return this.cursors[side].relative
   }
 
   /** Unclamped reach-zone position of a hand (0..1 = on screen), for diagnostics. */
