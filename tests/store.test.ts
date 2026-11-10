@@ -104,7 +104,16 @@ describe('data file', () => {
   })
 })
 
-describe('auto-start', () => {
+describe('auto-start .desktop entry', () => {
+  it('quotes paths with spaces in the Exec line', () => {
+    expect(desktopEntry(['/usr/bin/electron', '/home/me/My Games/app'])).toContain(
+      'Exec=/usr/bin/electron "/home/me/My Games/app"'
+    )
+  })
+})
+
+// The XDG autostart file is the Linux mechanism (Windows/macOS use Electron login items).
+describe.runIf(process.platform === 'linux')('auto-start (Linux)', () => {
   const old = process.env.XDG_CONFIG_HOME
   afterEach(() => {
     process.env.XDG_CONFIG_HOME = old
@@ -118,11 +127,5 @@ describe('auto-start', () => {
     expect(readFileSync(autostartFile(), 'utf8')).toContain('Exec=/opt/GameMotion.AppImage')
     setAutostart(false, [])
     expect(existsSync(autostartFile())).toBe(false)
-  })
-
-  it('quotes paths with spaces in the Exec line', () => {
-    expect(desktopEntry(['/usr/bin/electron', '/home/me/My Games/app'])).toContain(
-      'Exec=/usr/bin/electron "/home/me/My Games/app"'
-    )
   })
 })

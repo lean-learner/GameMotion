@@ -404,7 +404,9 @@ async function finishGuidedTest(run: GuidedTest): Promise<void> {
   }
   try {
     const file = await window.gameMotion.testReport.save(JSON.stringify(report, null, 2))
-    guidedSummary[guidedSummary.length - 1] = `Report saved: ${file.split('/').slice(-2).join('/')}`
+    // Show the last two path parts; Windows paths use backslashes.
+    guidedSummary[guidedSummary.length - 1] =
+      `Report saved: ${file.split(/[\\/]/).slice(-2).join('/')}`
   } catch (err) {
     guidedSummary[guidedSummary.length - 1] = `Could not save report: ${String(err)}`
     console.error('[test-run] save failed:', err)
@@ -665,6 +667,7 @@ function renderControls(): void {
   for (const el of [ui.cameraSelect, ui.poseModel, ui.delegate, ui.holdFps]) {
     el.disabled = busy || running
   }
+  if (window.gameMotion.platform !== 'linux') ui.holdFps.disabled = true
 }
 
 ui.play.addEventListener('click', () => void enterLauncher())
@@ -799,6 +802,12 @@ function logMetrics(): void {
   )
 }
 
+// Holding the camera's frame rate uses Linux's v4l2-ctl; elsewhere it isn't available.
+if (window.gameMotion.platform !== 'linux') {
+  ui.holdFps.checked = false
+  ui.holdFps.disabled = true
+  ui.holdFps.parentElement!.title = 'Only available on Linux (uses v4l2-ctl).'
+}
 ui.d.versions.textContent = `Electron ${window.gameMotion.versions.electron} · Chromium ${window.gameMotion.versions.chrome}`
 setInterval(renderDiagnostics, 250)
 setInterval(logMetrics, 5000)

@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('gameMotion', {
     electron: process.versions.electron,
     chrome: process.versions.chrome
   },
+  platform: process.platform,
   store: {
     get: () => ipcRenderer.invoke('store:get'),
     setActiveSlot: (slot: number) => ipcRenderer.invoke('store:set-active-slot', slot),

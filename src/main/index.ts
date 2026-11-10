@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol, session } from 'electron'
+import { app, BrowserWindow, ipcMain, protocol, session, systemPreferences } from 'electron'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
@@ -164,6 +164,25 @@ const fromApp = (e: Electron.IpcMainInvokeEvent): boolean =>
   !!e.senderFrame && isAppOrigin(e.senderFrame.url)
 
 /** How to launch this app again (for auto-start). */
+/**
+ * Start on login. Windows and macOS use Electron's login-item setting; Linux
+ * has no such API in Electron, so it uses an XDG autostart .desktop file.
+ */
+function autostartEnabled(): boolean {
+  if (process.platform === 'linux') return isAutostartEnabled()
+  return app.getLoginItemSettings().openAtLogin
+}
+
+function applyAutostart(enabled: boolean): void {
+  if (process.platform === 'linux') {
+    setAutostart(enabled, launchCommand())
+    return
+  }
+  // In development the Electron binary needs the app folder as an argument.
+  const args = app.isPackaged ? [] : [app.getAppPath()]
+  app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath, args })
+}
+
 function launchCommand(): string[] {
   if (process.env['APPIMAGE']) return [process.env['APPIMAGE']]
   return app.isPackaged ? [process.execPath] : [process.execPath, app.getAppPath()]
@@ -174,7 +193,7 @@ function registerStoreIpc(): void {
   const guard = (e: Electron.IpcMainInvokeEvent): void => {
     if (!fromApp(e)) throw new Error('forbidden')
   }
-  const view = (): unknown => ({ ...store.data, autostart: isAutostartEnabled() })
+  const view = (): unknown => ({ ...store.data, autostart: autostartEnabled() })
   ipcMain.handle('store:get', (e) => {
     guard(e)
     return view()
@@ -237,7 +256,7 @@ function registerStoreIpc(): void {
       const startFullscreen = c.startFullscreen
       store.update((d) => ({ ...d, settings: { ...d.settings, startFullscreen } }))
     }
-    if (typeof c.autostart === 'boolean') setAutostart(c.autostart, launchCommand())
+    if (typeof c.autostart === 'boolean') applyAutostart(c.autostart)
     return view()
   })
   ipcMain.handle('app:quit', (e) => {
@@ -273,7 +292,15 @@ function registerCameraTuningIpc(): void {
   })
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // macOS asks the user for camera access once; other systems need no prompt.
+  if (
+    process.platform === 'darwin' &&
+    systemPreferences.getMediaAccessStatus('camera') !== 'granted'
+  ) {
+    const granted = await systemPreferences.askForMediaAccess('camera')
+    if (!granted) console.warn('[main] camera access was not granted in macOS privacy settings')
+  }
   cameraTuning = new CameraTuning(join(app.getPath('userData'), 'camera-tuning-restore.json'))
   cameraTuning.recoverFromCrash()
   store = new Store(join(app.getPath('userData'), 'gamemotion-data.json'))

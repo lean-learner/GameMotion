@@ -1,0 +1,74 @@
+# Tests and packages GameMotion on Windows, macOS and Linux.
+# Every push / pull request: lint, typecheck, unit tests, packaged builds
+# (downloadable from the run's "Artifacts").
+# Pushing a tag like v0.2.0: also publishes a GitHub release with all builds.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write # only used by the release job
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            dist: --win
+          - os: macos-latest
+            dist: --mac
+          - os: ubuntu-latest
+            dist: --linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Download tracking models (bundled into the app)
+        run: npm run setup:models
+      - run: npm run lint
+      - run: npm test
+      - name: Build (assets, typecheck, bundle)
+        run: npm run build
+      - name: Package
+        run: npx electron-builder ${{ matrix.dist }} --publish never
+        env:
+          # No signing certificates yet: build unsigned.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GameMotion-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Checksums
+        run: cd artifacts && sha256sum * > SHA256SUMS.txt && cp ../INSTALL.md .
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          body_path: INSTALL.md

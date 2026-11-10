@@ -3,8 +3,10 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 /**
- * Optional "start on login" for Ubuntu/GNOME, via the XDG autostart folder.
- * Off by default: the file exists only while the user has the setting on.
+ * Optional "start on login" for Linux desktops (GNOME, KDE, ...), via the XDG
+ * autostart folder. Off by default: the file exists only while the user has
+ * the setting on. Windows and macOS use Electron's login items instead (see
+ * applyAutostart in index.ts).
  */
 export function autostartFile(): string {
   const configHome = process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config')

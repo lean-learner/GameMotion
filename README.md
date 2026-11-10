@@ -12,7 +12,47 @@ per-player **Reach setup**, and a second game, **Meteor Dodge** (lean and crouch
 No cloud services: models and WASM ship with the app, and all non-local network
 requests are blocked at runtime.
 
-## Setup (once, needs internet)
+## Install (players)
+
+Download the build for your system and follow **[INSTALL.md](INSTALL.md)**. Builds exist
+for Windows (installer or portable zip), macOS (Intel and Apple Silicon) and Linux
+(AppImage or tar.gz). Everything, including the tracking models, is inside, so it runs
+offline on any computer.
+
+## Platforms
+
+Electron keeps GameMotion cross-platform; nearly all code is shared. Platform differences:
+
+| Feature                           | Windows                         | macOS                                      | Linux                         |
+| --------------------------------- | ------------------------------- | ------------------------------------------ | ----------------------------- |
+| Tracking, games, launcher, scores | yes                             | yes                                        | yes                           |
+| Camera permission                 | Windows privacy settings        | asked on first start (`askForMediaAccess`) | none needed                   |
+| Start on login                    | Electron login item             | Electron login item                        | XDG autostart `.desktop` file |
+| Hold 30 fps in low light          | not available (option disabled) | not available (option disabled)            | via `v4l2-ctl`, if installed  |
+| Data folder                       | `%APPDATA%\gamemotion`          | `~/Library/Application Support/gamemotion` | `~/.config/gamemotion`        |
+
+## Building releases (developers)
+
+```bash
+npm run release          # builds for this OS into release/<version>/ with SHA256SUMS.txt
+                         # (on Linux: AppImage, tar.gz and the portable Windows zip)
+npm run dist:win         # on Windows: installer + portable zip
+npm run dist:mac         # on macOS: DMGs for Intel and Apple Silicon
+npm run dist:linux       # on Linux: AppImage + tar.gz
+npm run icons            # regenerate the app icon (scripts/make-icons.py, needs Pillow)
+```
+
+**GitHub Actions** (`.github/workflows/build.yml`) tests and packages natively on
+Windows, macOS and Linux for every push. Pushing a tag such as `v0.2.0` publishes a
+GitHub release with every build, checksums and INSTALL.md. Builds aren't code-signed
+yet, so first launches show the usual Windows SmartScreen / macOS Gatekeeper warning;
+INSTALL.md explains how to proceed.
+
+Building the Windows _installer_ from Linux needs Wine, but the portable Windows zip
+doesn't (its `.exe` just lacks an embedded icon). Mac disk images can only be built
+on macOS (or in CI).
+
+## Setup for development (once, needs internet)
 
 ```bash
 npm install            # dependencies + Electron binary
@@ -27,7 +67,7 @@ After this the app works fully offline.
 npm run dev     # development (hot reload); F12 = DevTools
 npm start       # production build, then run it
 npm run build   # assets + typecheck + production bundle in out/
-npm run build:linux   # packaged AppImage/deb (electron-builder)
+npm run release       # packaged builds for this OS (see "Building releases")
 ```
 
 In the app: pick a camera, then **Start tracking** / **Stop tracking**. F11 toggles
@@ -325,13 +365,10 @@ main process (slot ids, names stripped of control characters and capped at 20 ch
 integer scores, game ids `[a-z0-9-]`). Self-test runs use `~/.config/gamemotion-selftest`,
 so automated tests never touch real scores.
 
-**Packaging:** `npm run build:linux` produces `dist/gamemotion-0.1.0.AppImage`
-(about 178 MB, mostly Electron). It contains the app, all models and the WASM runtime,
-so it runs fully offline. Verified: the unpacked build and the AppImage both start on
-this machine, load the models from inside the package, track at 30 fps on the GPU and
-run Balloon Pop. A .deb target is ready except for a project homepage URL, which Debian
-metadata requires. Phaser and MediaPipe are build-time dependencies: they're bundled
-into the app's code, so their source isn't shipped as well.
+**Packaging:** see "Building releases" above. Each build (about 170–205 MB, mostly
+Electron) contains the app, all models and the WASM runtime, so it runs fully offline.
+Phaser and MediaPipe are build-time dependencies: they're bundled into the app's code,
+so their source isn't shipped as well.
 
 ## Milestone 5: Multiplayer
 

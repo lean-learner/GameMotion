@@ -39,6 +39,8 @@ declare global {
   interface Window {
     gameMotion: {
       versions: { electron: string; chrome: string }
+      /** 'win32' | 'darwin' | 'linux' | ... */
+      platform: string
       store: {
         get(): Promise<StoreView>
         setActiveSlot(slot: number): Promise<StoreView>

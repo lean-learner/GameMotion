@@ -47,7 +47,8 @@ describe('findDeviceForLabel', () => {
   })
 })
 
-describe('CameraTuning (with a fake v4l2-ctl)', () => {
+// Camera tuning is Linux-only (v4l2-ctl); the fake tool is a shell script.
+describe.runIf(process.platform === 'linux')('CameraTuning (with a fake v4l2-ctl)', () => {
   let dir: string
   let sys: string
   let state: string

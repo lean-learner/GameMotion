@@ -1,37 +1,64 @@
+# Packaging for Windows, macOS and Linux. Models and the WASM runtime are inside
+# the app, so every build runs fully offline. See README "Install".
 appId: org.gamemotion.app
 productName: GameMotion
+copyright: Copyright © 2026 GameMotion contributors
 directories:
   buildResources: build
+  output: dist
 files:
   - '!**/.vscode/*'
   - '!src/*'
+  - '!scripts/*'
+  - '!tests/*'
+  - '!release/*'
+  - '!.github/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,INSTALL.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml,.gitattributes}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+# e.g. GameMotion-0.2.0-win-x64.exe, GameMotion-0.2.0-linux-x86_64.AppImage
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+npmRebuild: false
+publish: null
+
 win:
   executableName: gamemotion
+  target:
+    - target: nsis # installer
+      arch: [x64]
+    - target: zip # portable: unzip and run gamemotion.exe
+      arch: [x64]
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: ${productName}
-  uninstallDisplayName: ${productName}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: GameMotion
+  uninstallDisplayName: GameMotion
+
 mac:
+  category: public.app-category.games
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSCameraUsageDescription: GameMotion uses the camera for on-device motion tracking.
+    - NSCameraUsageDescription: GameMotion uses the camera for on-device motion tracking. Video never leaves this computer.
   notarize: false
-dmg:
-  artifactName: ${name}-${version}.${ext}
+
 linux:
-  target:
-    # .deb needs a project homepage URL (package metadata); add one, then re-enable 'deb'.
-    - AppImage
+  executableName: gamemotion
+  synopsis: Local motion games with your webcam
+  description: Play motion games with your body and hands, tracked by your webcam, fully offline.
+  category: Game
   syncDesktopName: true
   maintainer: GameMotion contributors
-  category: Game
-appImage:
-  artifactName: ${name}-${version}.${ext}
-npmRebuild: false
+  target:
+    - AppImage # single file: chmod +x and run
+    - tar.gz # plain folder, for systems without FUSE
+    # .deb also needs a project homepage URL in package.json; add one to enable it.

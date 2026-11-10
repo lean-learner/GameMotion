@@ -19,7 +19,10 @@ describe('resolveAppPath', () => {
       'app://gamemotion/%2e%2e/%2e%2e/etc/passwd',
       'app://gamemotion/..%2f..%2fetc%2fpasswd',
       'app://gamemotion/assets/..%2f..%2f..%2f..%2fetc%2fpasswd',
-      'app://gamemotion/%2e%2e%5c%2e%2e%5cetc%5cpasswd'
+      'app://gamemotion/%2e%2e%5c%2e%2e%5cetc%5cpasswd',
+      // Windows-style: drive letters and backslashes
+      'app://gamemotion/C:/Windows/win.ini',
+      'app://gamemotion/..%5c..%5cWindows%5cwin.ini'
     ]
     for (const url of attempts) {
       const file = resolveAppPath(root, url)
