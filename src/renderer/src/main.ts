@@ -2,7 +2,7 @@ import { DisplayBrightener } from './camera/brightness'
 import { DwellSelector, type DwellState } from './input/dwell'
 import { MotionInput } from './input/MotionInput'
 import { PlayerTracker } from './input/players'
-import type { InputEvent, MotionSnapshot } from './input/types'
+import type { InputEvent, MotionSnapshot, Vec2 } from './input/types'
 import { describe, InputOverlay } from './overlay/InputOverlay'
 import { GuidedTest } from './testrun/GuidedTest'
 import { balloonPop } from './games/balloonPop'
@@ -114,12 +114,29 @@ const rowsFor = (entries: { slot: number; score: number }[]): ScoreRow[] =>
     }
   })
 
+/**
+ * Self-test only (`demo` URL option): scripted cursors that slice back and forth
+ * across the screen, so game effects can be checked without a person moving.
+ */
+const DEMO_INPUT = new URLSearchParams(location.search).has('demo')
+function demoCursors(now: number, player: number): { left: Vec2 | null; right: Vec2 | null } {
+  const t = now / 1000 + player * 1.3
+  return {
+    left: null,
+    // Fast horizontal strokes (about 1.6 screen widths per second) drifting up and down.
+    right: { x: 0.5 + 0.48 * Math.sin(t * 3.4), y: 0.45 + 0.3 * Math.sin(t * 0.7) }
+  }
+}
+
 const gameServices: GameServices = {
   input: {
-    cursors: (now, player = 0) => ({
-      left: motions[player]?.predictCursor('left', now) ?? null,
-      right: motions[player]?.predictCursor('right', now) ?? null
-    }),
+    cursors: (now, player = 0) =>
+      DEMO_INPUT
+        ? demoCursors(now, player)
+        : {
+            left: motions[player]?.predictCursor('left', now) ?? null,
+            right: motions[player]?.predictCursor('right', now) ?? null
+          },
     snapshot: (player = 0) => snapshots[player] ?? null,
     onEvent: (listener) => {
       gameListeners.add(listener)

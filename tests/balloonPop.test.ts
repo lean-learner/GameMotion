@@ -6,6 +6,7 @@ import {
   COUNTDOWN_MS,
   FIELD,
   MIN_POP_SPEED,
+  MULTI_SLICE_MIN,
   playerInView,
   ROUND_MS,
   type Balloon,
@@ -224,6 +225,60 @@ describe('Balloon Pop rules', () => {
   })
 })
 
+describe('slicing', () => {
+  /** Three still balloons in a row, so one stroke can slice them all. */
+  function row(g: BalloonPopLogic): Balloon[] {
+    const mk = (id: number, x: number): Balloon => ({
+      id: 1000 + id,
+      kind: 'normal',
+      color: 0,
+      x,
+      y: 300,
+      r: 40,
+      baseX: x,
+      speed: 0,
+      wobblePhase: -Math.PI / 2
+    })
+    g.balloons = [mk(1, 400), mk(2, 600), mk(3, 800)]
+    return g.balloons
+  }
+
+  it('awards a multi-slice bonus when a stroke pops several balloons', () => {
+    const g = new BalloonPopLogic(seeded())
+    let t = playing(g)
+    row(g)
+    let bonus = null
+    let strokes = 0
+    // One fast stroke left to right through all three, then the hand stops.
+    for (let x = 200; x <= 1000; x += 30) {
+      const r = g.update((t += 16), [right({ x, y: 300 })])
+      strokes += r.strokes.length
+    }
+    for (let i = 0; i < 12; i++) {
+      const r = g.update((t += 16), [right({ x: 1000, y: 300 })])
+      bonus ??= r.bonuses[0] ?? null
+    }
+    expect(strokes).toBe(1)
+    expect(bonus).toMatchObject({ count: MULTI_SLICE_MIN, player: 0, hand: 'right' })
+    expect(g.score).toBeGreaterThanOrEqual(3 * 10 + bonus!.points)
+  })
+
+  it('gives no bonus for separate strokes', () => {
+    const g = new BalloonPopLogic(seeded())
+    let t = playing(g)
+    const [a, b, c] = row(g)
+    let bonuses = 0
+    for (const target of [a, b, c]) {
+      // Fast stroke through one balloon, then a full stop.
+      for (let x = target.x - 150; x <= target.x + 60; x += 30)
+        bonuses += g.update((t += 16), [right({ x, y: 300 })]).bonuses.length
+      for (let i = 0; i < 12; i++)
+        bonuses += g.update((t += 16), [right({ x: target.x + 60, y: 300 })]).bonuses.length
+    }
+    expect(bonuses).toBe(0)
+  })
+})
+
 describe('versus (two players)', () => {
   it('scores each player separately and finds the winner', () => {
     const g = new BalloonPopLogic(seeded())
@@ -270,15 +325,16 @@ describe('playerInView (auto-pause rule)', () => {
   })
 
   it('treats "no tracking data yet" as in view (models warming up)', () => {
-    expect(playerInView(null, 5000)).toBe(true)
+    expect(playerInView(null)).toBe(true)
   })
 
   it('is out of view when the shoulders are not tracked', () => {
-    expect(playerInView(snap(false, 4990), 5000)).toBe(false)
-    expect(playerInView(snap(true, 4990), 5000)).toBe(true)
+    expect(playerInView(snap(false, 4990))).toBe(false)
+    expect(playerInView(snap(true, 4990))).toBe(true)
   })
 
-  it('is out of view when tracking data has stopped arriving', () => {
-    expect(playerInView(snap(true, 3000), 5000)).toBe(false)
+  it('does not treat a stall (old data) as the player leaving', () => {
+    // Seen in practice: a ~1 s main-thread stall on a first run must not pause.
+    expect(playerInView(snap(true, 3000))).toBe(true)
   })
 })

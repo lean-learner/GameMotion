@@ -35,6 +35,8 @@ export interface PopEvent {
   hand: Side
   points: number
   combo: number
+  /** Direction the hand was moving, radians (for the slice effect). */
+  angle: number
 }
 
 /** A hand touched a balloon but moved too slowly to pop it (draw a wobble). */
@@ -44,9 +46,24 @@ export interface BumpEvent {
   hand: Side
 }
 
+/** Several balloons sliced in one continuous stroke. */
+export interface SliceBonus {
+  player: number
+  hand: Side
+  count: number
+  points: number
+  /** Where the stroke's last pop happened (for the bonus label). */
+  x: number
+  y: number
+}
+
 export interface UpdateResult {
   pops: PopEvent[]
   bumps: BumpEvent[]
+  /** Multi-slice bonuses awarded when a stroke ends. */
+  bonuses: SliceBonus[]
+  /** Hands that just started a fast stroke (for a swoosh sound). */
+  strokes: { player: number; hand: Side }[]
 }
 
 export const FIELD = { width: 1280, height: 720 }
@@ -66,6 +83,10 @@ export const MIN_POP_SPEED = 400
 const SPEED_WINDOW_MS = 120
 /** A balloon wobbles at most this often when bumped. */
 const BUMP_COOLDOWN_MS = 600
+/** Popping this many balloons in one stroke earns a bonus... */
+export const MULTI_SLICE_MIN = 3
+/** ...of this many points per balloon in the stroke. */
+export const MULTI_SLICE_POINTS = 10
 
 const GOLDEN_CHANCE = 0.08
 const BASE_POINTS: Record<BalloonKind, number> = { normal: 10, golden: 50 }
@@ -98,6 +119,8 @@ export class BalloonPopLogic {
   private prev = new Map<string, Vec2>()
   private trail = new Map<string, { t: number; p: Vec2 }[]>()
   private bumpedAt = new Map<number, number>()
+  /** Current fast stroke per hand: balloons popped so far and where the last one was. */
+  private stroke = new Map<string, { pops: number; x: number; y: number }>()
 
   constructor(private readonly random: () => number = Math.random) {}
 
@@ -168,7 +191,7 @@ export class BalloonPopLogic {
 
   /** Advances the game; returns the balloons popped (and bumped) on this update. */
   update(now: number, hands: HandInput[]): UpdateResult {
-    const result: UpdateResult = { pops: [], bumps: [] }
+    const result: UpdateResult = { pops: [], bumps: [], bonuses: [], strokes: [] }
     const dt = Math.min(now - this.lastUpdate, 100) // clamp: a stall shouldn't teleport balloons
     this.lastUpdate = now
     if (this.phase === 'countdown' && now - this.phaseStart >= COUNTDOWN_MS) {
@@ -190,7 +213,9 @@ export class BalloonPopLogic {
 
     this.spawn()
     this.move(dt)
+    this.trackStrokes(now, hands, result) // stroke starts (before hits) ...
     this.hitTest(now, hands, result)
+    this.endStrokes(now, hands, result) // ... and bonuses when strokes end
     return result
   }
 
@@ -258,6 +283,32 @@ export class BalloonPopLogic {
     return dt > 0 ? Math.hypot(b.p.x - a.p.x, b.p.y - a.p.y) / dt : 0
   }
 
+  /** A stroke starts when a hand gets fast enough to slice. */
+  private trackStrokes(now: number, hands: HandInput[], out: UpdateResult): void {
+    for (const h of hands) {
+      const k = key(h)
+      if (h.pos && !this.stroke.has(k) && this.speed(k, now) >= MIN_POP_SPEED) {
+        this.stroke.set(k, { pops: 0, x: h.pos.x, y: h.pos.y })
+        out.strokes.push({ player: h.player, hand: h.hand })
+      }
+    }
+  }
+
+  /** A stroke ends when the hand slows down or disappears; big strokes earn a bonus. */
+  private endStrokes(now: number, hands: HandInput[], out: UpdateResult): void {
+    for (const h of hands) {
+      const k = key(h)
+      const s = this.stroke.get(k)
+      if (!s || (h.pos && this.speed(k, now) >= MIN_POP_SPEED)) continue
+      this.stroke.delete(k)
+      if (s.pops >= MULTI_SLICE_MIN) {
+        const points = s.pops * MULTI_SLICE_POINTS
+        this.scores[h.player] += points
+        out.bonuses.push({ player: h.player, hand: h.hand, count: s.pops, points, x: s.x, y: s.y })
+      }
+    }
+  }
+
   private hitTest(now: number, hands: HandInput[], out: UpdateResult): void {
     for (const h of hands) {
       const k = key(h)
@@ -284,7 +335,10 @@ export class BalloonPopLogic {
         const points = BASE_POINTS[b.kind] * comboMultiplier(this.combos[p])
         this.scores[p] += points
         this.popped[p]++
-        out.pops.push({ balloon: b, player: p, hand: h.hand, points, combo: this.combos[p] })
+        const angle = Math.atan2(cur.y - prev.y, cur.x - prev.x)
+        out.pops.push({ balloon: b, player: p, hand: h.hand, points, combo: this.combos[p], angle })
+        const s = this.stroke.get(k)
+        if (s) Object.assign(s, { pops: s.pops + 1, x: b.x, y: b.y })
       }
       if (hit.length) {
         const ids = new Set(hit.map((b) => b.id))
@@ -296,6 +350,7 @@ export class BalloonPopLogic {
   private resetHands(): void {
     this.prev.clear()
     this.trail.clear()
+    this.stroke.clear()
   }
 
   private setPhase(phase: Phase, now: number): void {
@@ -305,13 +360,13 @@ export class BalloonPopLogic {
   }
 }
 
-/** Tracking data older than this counts as "not tracked" (camera or tracker stalled). */
-export const STALE_MS = 1000
-
 /**
- * Is the player in view? No data yet counts as yes: tracking is still warming
- * up, which must not pause the game. Stale data counts as no.
+ * Is the player in view? Only positive evidence counts as "no": tracking says
+ * the shoulders are not visible. No data yet (models warming up) and old data
+ * (the app or GPU stalled briefly, e.g. compiling shaders on a first run) both
+ * count as "yes": neither means the player left. A lost camera is handled
+ * separately by the platform.
  */
-export function playerInView(snap: MotionSnapshot | null, now: number): boolean {
-  return !snap || (snap.tracked && now - snap.time < STALE_MS)
+export function playerInView(snap: MotionSnapshot | null): boolean {
+  return !snap || snap.tracked
 }

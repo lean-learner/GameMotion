@@ -160,3 +160,52 @@ export class CursorLayer {
 
 /** Parses "#rrggbb" to a Phaser colour number. */
 export const hex = (color: string): number => parseInt(color.replace('#', ''), 16)
+
+/** How long a blade trail point stays visible. */
+const TRAIL_MS = 170
+
+/**
+ * Glowing blade trails behind hand cursors: a tapering ribbon along each
+ * hand's recent path, brighter when the hand is fast enough to slice.
+ * Drawn every rendered frame, so trails are smooth even on a 30 fps camera.
+ */
+export class TrailLayer {
+  private readonly gfx: Phaser.GameObjects.Graphics
+  private readonly trails = new Map<string, { x: number; y: number; t: number }[]>()
+
+  constructor(scene: Phaser.Scene, depth = 95) {
+    this.gfx = scene.add.graphics().setDepth(depth)
+  }
+
+  /** @param hands one entry per hand: a stable key, position (null = gone), colour, armed. */
+  draw(
+    now: number,
+    hands: { key: string; pos: Vec2 | null; color: number; armed: boolean }[]
+  ): void {
+    const g = this.gfx
+    g.clear()
+    for (const h of hands) {
+      const trail = this.trails.get(h.key) ?? []
+      if (h.pos) trail.push({ x: h.pos.x, y: h.pos.y, t: now })
+      while (trail.length && now - trail[0].t > TRAIL_MS) trail.shift()
+      if (!h.pos && trail.length === 0) {
+        this.trails.delete(h.key)
+        continue
+      }
+      this.trails.set(h.key, trail)
+      if (trail.length < 2) continue
+      const maxW = h.armed ? 26 : 10
+      for (let i = 1; i < trail.length; i++) {
+        const a = trail[i - 1]
+        const b = trail[i]
+        const k = i / (trail.length - 1) // 0 at the tail, 1 at the hand
+        const w = Math.max(1, maxW * k)
+        // Coloured glow, then a white blade core on top.
+        g.lineStyle(w * 1.8, h.color, (h.armed ? 0.35 : 0.15) * k)
+        g.lineBetween(a.x, a.y, b.x, b.y)
+        g.lineStyle(w * 0.6, 0xffffff, (h.armed ? 0.95 : 0.4) * k)
+        g.lineBetween(a.x, a.y, b.x, b.y)
+      }
+    }
+  }
+}

@@ -42,6 +42,34 @@ export class Sfx {
     src.start()
   }
 
+  /** Blade swoosh: a quick noise sweep from low to high. */
+  swoosh(): void {
+    const a = this.audio()
+    if (!a) return
+    const { ctx, out } = a
+    const dur = 0.16
+    const len = Math.floor(ctx.sampleRate * dur)
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate)
+    const data = buf.getChannelData(0)
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.sin((Math.PI * i) / len)
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.Q.value = 2
+    filter.frequency.setValueAtTime(600, ctx.currentTime)
+    filter.frequency.exponentialRampToValueAtTime(3200, ctx.currentTime + dur)
+    const g = ctx.createGain()
+    g.gain.value = 0.45
+    src.connect(filter).connect(g).connect(out)
+    src.start()
+  }
+
+  /** Rising three-note flourish for a multi-slice bonus. */
+  bonus(): void {
+    ;[660, 880, 1320].forEach((f, i) => this.tone(f, i * 0.06, 0.14, 'triangle', 0.4))
+  }
+
   /** Bright two-note chime (golden balloon). */
   chime(): void {
     this.tone(880, 0, 0.12)

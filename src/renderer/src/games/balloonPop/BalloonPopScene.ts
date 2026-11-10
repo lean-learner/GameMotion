@@ -8,6 +8,7 @@ import {
   FONT,
   HAND_COLORS,
   hex,
+  TrailLayer,
   type Button,
   type CursorDraw
 } from '../ui'
@@ -21,7 +22,8 @@ import {
   type BumpEvent,
   type HandInput,
   type Phase,
-  type PopEvent
+  type PopEvent,
+  type SliceBonus
 } from './logic'
 
 const W = FIELD.width
@@ -49,6 +51,7 @@ export class BalloonPopScene extends Phaser.Scene {
   private menu!: DwellButtons
   private pauseButton!: DwellButtons
   private cursorLayer!: CursorLayer
+  private trails!: TrailLayer
   /** Increments every round, so a late score-save result can't land on the wrong screen. */
   private round = 0
   private shownPhase: Phase | null = null
@@ -130,6 +133,7 @@ export class BalloonPopScene extends Phaser.Scene {
     this.menu = new DwellButtons(this, { dwellMs: 1000, depth: 55 })
     this.pauseButton = new DwellButtons(this, { dwellMs: 1500, depth: 55, alpha: 0.45 })
     this.cursorLayer = new CursorLayer(this, CURSOR_RADIUS)
+    this.trails = new TrailLayer(this)
     if (this.autostart) this.logic.start(performance.now(), this.players.length)
   }
 
@@ -148,9 +152,11 @@ export class BalloonPopScene extends Phaser.Scene {
     })
 
     this.autoPause(now)
-    const { pops, bumps } = this.logic.update(now, hands)
+    const { pops, bumps, bonuses, strokes } = this.logic.update(now, hands)
+    if (strokes.length) this.sfx.swoosh()
     for (const pop of pops) this.popEffect(pop)
     for (const bump of bumps) this.bumpEffect(bump)
+    for (const bonus of bonuses) this.bonusEffect(bonus)
     this.countdownBeeps(now)
     if (this.logic.phase !== this.shownPhase) this.showPhase(this.logic.phase)
 
@@ -159,7 +165,17 @@ export class BalloonPopScene extends Phaser.Scene {
     // Any player can press menu buttons.
     const pressed = this.menu.update(now, screenHands) ?? this.pauseButton.update(now, screenHands)
     if (pressed) this.act(pressed)
-    this.cursorLayer.draw(hands.map((h) => this.cursorStyle(h, now)))
+    const styles = hands.map((h) => this.cursorStyle(h, now))
+    this.trails.draw(
+      now,
+      hands.map((h, i) => ({
+        key: `${h.player}:${h.hand}`,
+        pos: h.pos,
+        color: styles[i].color,
+        armed: !!styles[i].armed
+      }))
+    )
+    this.cursorLayer.draw(styles)
   }
 
   private cursorStyle(h: HandInput, now: number): CursorDraw {
@@ -175,14 +191,23 @@ export class BalloonPopScene extends Phaser.Scene {
     const active = this.logic.phase === 'playing' || this.logic.phase === 'countdown'
     // In versus, pause if anyone leaves: it isn't fair to keep playing without them.
     const everyoneInView = this.players.every((_, i) =>
-      playerInView(this.services.input.snapshot(i), now)
+      playerInView(this.services.input.snapshot(i))
     )
     if (!active || everyoneInView) {
       this.outOfViewSince = null
       return
     }
     this.outOfViewSince ??= now
-    if (now - this.outOfViewSince >= OUT_OF_VIEW_MS) this.logic.pause(now, 'out-of-view')
+    if (now - this.outOfViewSince >= OUT_OF_VIEW_MS) {
+      const why = this.players.map((_, i) => {
+        const snap = this.services.input.snapshot(i)
+        return snap
+          ? `p${i + 1} tracked=${snap.tracked} age=${Math.round(now - snap.time)}ms`
+          : `p${i + 1} no data`
+      })
+      console.info(`[game] auto-pause: ${why.join(', ')}`)
+      this.logic.pause(now, 'out-of-view')
+    }
   }
 
   private countdownBeeps(now: number): void {
@@ -412,6 +437,7 @@ export class BalloonPopScene extends Phaser.Scene {
     this.sparks.explode(b.kind === 'golden' ? 34 : 20, b.x, b.y)
     if (b.kind === 'golden') this.sfx.chime()
     else this.sfx.pop(p.combo)
+    this.sliceHalves(p)
     // In versus the points float up in the scorer's colour.
     const textColor = this.versus
       ? this.players[p.player].color
@@ -434,6 +460,70 @@ export class BalloonPopScene extends Phaser.Scene {
       alpha: 0,
       duration: 800,
       ease: 'cubic.out',
+      onComplete: () => label.destroy()
+    })
+  }
+
+  /** The balloon splits along the swipe; the halves fly apart and fall. */
+  private sliceHalves(p: PopEvent): void {
+    const b = p.balloon
+    const key = b.kind === 'golden' ? 'balloon-gold' : `balloon-${b.color}`
+    const frame = this.textures.getFrame(key)
+    const w = frame.width
+    // The texture's cut line is vertical; turn it to lie along the swipe.
+    const rot = p.angle - Math.PI / 2
+    ;[-1, 1].forEach((side) => {
+      const half = this.add
+        .image(b.x, b.y, key)
+        .setOrigin(0.5, 1.15 / 2.9)
+        .setScale(b.r / TEX_R)
+        .setRotation(rot)
+        .setDepth(12)
+        .setCrop(side < 0 ? 0 : w / 2, 0, w / 2, frame.height)
+      // Each half moves away from the cut, then drops.
+      const dx = side * Math.cos(rot) * 90
+      const dy = side * Math.sin(rot) * 90
+      this.tweens.add({
+        targets: half,
+        x: b.x + dx,
+        rotation: rot + side * 0.9,
+        alpha: 0,
+        duration: 650,
+        ease: 'cubic.out'
+      })
+      this.tweens.add({
+        targets: half,
+        y: b.y + dy + 140,
+        duration: 650,
+        ease: 'quad.in',
+        onComplete: () => half.destroy()
+      })
+    })
+  }
+
+  /** Several balloons in one stroke: a big floating bonus label. */
+  private bonusEffect(bonus: SliceBonus): void {
+    this.sfx.bonus()
+    console.info(`[game] slice bonus x${bonus.count} +${bonus.points} (player ${bonus.player + 1})`)
+    const color = this.versus ? this.players[bonus.player].color : '#ffe14d'
+    const label = this.add
+      .text(bonus.x, bonus.y - 40, `${bonus.count}x slice!  +${bonus.points}`, {
+        fontFamily: FONT,
+        fontSize: '52px',
+        fontStyle: 'bold',
+        color
+      })
+      .setOrigin(0.5)
+      .setDepth(40)
+      .setStroke('#1d3557', 8)
+      .setScale(0.6)
+    this.tweens.add({ targets: label, scale: 1.1, duration: 180, ease: 'back.out' })
+    this.tweens.add({
+      targets: label,
+      y: bonus.y - 150,
+      alpha: 0,
+      delay: 500,
+      duration: 700,
       onComplete: () => label.destroy()
     })
   }
