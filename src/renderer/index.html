@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>GameMotion</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' ws:; object-src 'none'"
+    />
+    <link href="./assets/main.css" type="text/css" rel="stylesheet" />
+  </head>
+
+  <body>
+    <header class="toolbar">
+      <h1>GameMotion <span>settings &amp; diagnostics</span></h1>
+      <label>
+        Camera
+        <select id="camera-select"></select>
+      </label>
+      <label>
+        Pose model
+        <select id="pose-model">
+          <option value="full" selected>Full</option>
+          <option value="lite">Lite</option>
+          <option value="heavy">Heavy (most accurate)</option>
+        </select>
+      </label>
+      <label>
+        Execution
+        <select id="delegate">
+          <option value="auto" selected>Auto (GPU, CPU fallback)</option>
+          <option value="GPU">GPU only</option>
+          <option value="CPU">CPU only</option>
+        </select>
+      </label>
+      <label>
+        Max rate
+        <select id="max-hz">
+          <option value="0" selected>Every frame</option>
+          <option value="30">30 Hz cap</option>
+          <option value="15">15 Hz cap</option>
+        </select>
+      </label>
+      <div class="checks">
+        <label
+          class="check"
+          title="Only while tracking: stops the webcam lowering its frame rate in dim light. The original camera setting is restored afterwards."
+        >
+          <input id="hold-fps" type="checkbox" checked /> Hold 30 fps in low light
+        </label>
+        <label
+          class="check"
+          title="Brightens the displayed picture on the GPU when it is dark. Tracking uses the original frames."
+        >
+          <input id="brighten" type="checkbox" checked /> Auto-brighten display
+        </label>
+        <label
+          class="check"
+          title="Shows hand cursors, dwell buttons, lean/crouch meters and detected gestures."
+        >
+          <input id="input-test" type="checkbox" checked /> Motion input test layer
+        </label>
+      </div>
+      <button id="play" type="button" class="primary">Open launcher</button>
+      <button id="guided" type="button">Run guided test</button>
+      <button id="toggle" type="button" class="primary">Start tracking</button>
+    </header>
+    <section class="settings" aria-label="Players and app settings">
+      <span class="settings-title">Players</span>
+      <div id="player-names" class="player-names"></div>
+      <label class="check"><input id="start-fullscreen" type="checkbox" /> Start fullscreen</label>
+      <label class="check" title="Adds GameMotion to ~/.config/autostart while switched on">
+        <input id="autostart" type="checkbox" /> Start on login
+      </label>
+      <span class="settings-hint">Esc: game → launcher → this view · F11: fullscreen</span>
+    </section>
+
+    <main class="stage-wrap">
+      <div id="game-root" hidden></div>
+      <div id="stage" class="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <canvas id="input-layer"></canvas>
+        <section id="diagnostics" class="diagnostics" aria-live="polite">
+          <dl>
+            <dt>Status</dt>
+            <dd id="d-status">Idle</dd>
+            <dt>Camera</dt>
+            <dd id="d-camera">-</dd>
+            <dt>Camera FPS</dt>
+            <dd id="d-camera-fps">-</dd>
+            <dt>Tracking FPS</dt>
+            <dd id="d-tracking-fps">-</dd>
+            <dt>Inference</dt>
+            <dd id="d-inference">-</dd>
+            <dt>Latency</dt>
+            <dd id="d-latency">-</dd>
+            <dt>Execution</dt>
+            <dd id="d-delegate">-</dd>
+            <dt>Detected</dt>
+            <dd id="d-detected">-</dd>
+            <dt>Skipped</dt>
+            <dd id="d-skipped">-</dd>
+            <dt>Camera tuning</dt>
+            <dd id="d-tuning">-</dd>
+            <dt>Brightness</dt>
+            <dd id="d-brightness">-</dd>
+            <dt>Body in view</dt>
+            <dd id="d-body">-</dd>
+            <dt>Calibration</dt>
+            <dd id="d-calibration">-</dd>
+            <dt>Posture</dt>
+            <dd id="d-posture">-</dd>
+          </dl>
+          <p id="d-versions" class="versions"></p>
+        </section>
+        <div id="message" class="message" hidden></div>
+      </div>
+    </main>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,47 @@
+{
+  "name": "gamemotion",
+  "version": "0.1.0",
+  "description": "Local webcam body and hand tracking prototype (Milestone 1)",
+  "main": "./out/main/index.js",
+  "author": "GameMotion contributors",
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "eslint --cache .",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "start": "npm run build && electron-vite preview --skipBuild",
+    "dev": "electron-vite dev",
+    "build": "npm run assets && npm run typecheck && electron-vite build",
+    "postinstall": "install-electron && electron-builder install-app-deps",
+    "build:unpack": "npm run build && electron-builder --dir",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux",
+    "setup:models": "node scripts/download-models.mjs",
+    "assets": "node scripts/prepare-assets.mjs",
+    "predev": "npm run assets",
+    "test": "vitest run",
+    "selftest": "node scripts/selftest.mjs"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^4.0.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/eslint-config-prettier": "^3.0.1",
+    "@electron-toolkit/eslint-config-ts": "^4.0.0",
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@mediapipe/tasks-vision": "^1.2.2",
+    "@types/node": "^24.19.2",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^6.0.0",
+    "eslint": "^10.12.0",
+    "phaser": "^4.2.1",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.1.0"
+  },
+  "desktopName": "gamemotion.desktop"
+}
