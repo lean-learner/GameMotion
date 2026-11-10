@@ -1,4 +1,4 @@
-# GameMotion — local motion games (Milestones 1–4)
+# GameMotion — local motion games (Milestones 1–5)
 
 A fully local Electron app for webcam motion games. Milestone 1 shows the webcam
 (mirrored) with a live body skeleton and hand landmarks from MediaPipe, plus a
@@ -6,7 +6,8 @@ diagnostics overlay. Milestone 2 turns that tracking into game input: hand curso
 swipes, crouch, lean, calibration and dwell selection. Milestone 3 adds the first
 game, **Balloon Pop**, built with Phaser 4. Milestone 4 makes it a platform: a
 gesture-driven launcher, player slots with saved high scores, settings, optional
-start-on-login, and a packaged offline AppImage.
+start-on-login, and a packaged offline AppImage. Milestone 5 adds two-player mode
+(Balloon Pop Versus) with split-view tracking.
 No cloud services: models and WASM ship with the app, and all non-local network
 requests are blocked at runtime.
 
@@ -267,7 +268,10 @@ Click **Play Balloon Pop** (Esc returns). The game fills the window; the camera 
 to a corner preview so players can check their framing.
 
 - **Play:** a 60-second round. Balloons rise from the bottom, more and faster as the round
-  goes on. Touch them with either hand cursor. Normal balloons score 10 and golden ones 50.
+  goes on. **Swipe** through them with either hand cursor: a hand must be moving at least
+  400 px/s (about a third of the screen per second, measured over 120 ms) to pop. A resting
+  or slowly drifting hand only makes a balloon wobble. The cursor glows while the hand is
+  fast enough. Normal balloons score 10 and golden ones 50.
   Quick consecutive pops build a combo multiplier (×2 after 3, up to ×4); a balloon that
   escapes resets it.
 - **Controls, all by gesture:** dwell buttons for Start, Resume, Restart, Menu, Play again
@@ -328,9 +332,38 @@ run Balloon Pop. A .deb target is ready except for a project homepage URL, which
 metadata requires. Phaser and MediaPipe are build-time dependencies: they're bundled
 into the app's code, so their source isn't shipped as well.
 
+## Milestone 5: Multiplayer
+
+Choose **2 players** in the launcher, then pick a **Left player** and a **Right player**.
+**Balloon Pop Versus:** both players share the sky, each with their own score, coloured
+cursors and combo. The game ends with "<name> wins!" or "It's a draw!", and both scores go
+to a separate versus table (`balloon-pop-2p`). The game pauses if either player leaves
+the frame.
+
+- **Split-view tracking.** MediaPipe's person detector shrinks the whole frame to about
+  224 px, so two people standing far enough back to share the C270's narrow view become
+  too small to find. Measured on test clips: whole-frame detection found **1 of 6** people;
+  tracking each half of the frame separately found **6 of 6**. In 2-player mode the left
+  and right halves (overlapping by 10 %) each get their own pose and hand models. Landmarks
+  are mapped back to full-frame coordinates, and a person or hand seen in the overlap is
+  kept once (`tracking/splitView.ts`). Cost on the RTX 5070: pose about 15 ms + hands about
+  8–12 ms per frame, 28–30 fps, about 23–28 ms latency.
+- **Stable players** (`input/players.ts`). Bodies are matched to players by shoulder
+  position, scaled by body size, using the best overall pairing, so MediaPipe's
+  reporting order doesn't matter and players keep their number while moving. Newcomers
+  take a slot by side (left person = player 1). A player missing for 1.5 s frees their
+  slot. Each hand goes to the person whose wrist is nearest.
+- **Per-player input.** Each player has their own `MotionInput` (calibration, cursors,
+  gestures). Games get `services.players()` and pass a player index to
+  `input.cursors(now, player)` / `snapshot(player)`. Gesture events carry the player number.
+- **Rule for players:** stand side by side, each in your half, further back than in
+  single-player mode. The launcher hint shows "1 of 2 players in view" until both are
+  found.
+- **Lean events are debounced** (a direction must hold 100 ms), so a body jittering near
+  the threshold can't fire a stream of events. The continuous lean value isn't delayed.
+
 ## Next milestone
 
-Milestone 5, multiplayer: two-person detection (`numPoses: 2`), stable player
-identification (keep each person's track across frames by position and shoulder
-width), and cooperative or competitive games. Before that, worth doing with live tests:
-tune cursor reach from a guided-test report, and compare the Full and Heavy pose models.
+All five planned milestones are built. Worth doing next, with live tests: try Versus with
+two people (framing with the C270), tune cursor reach from a guided-test report, compare
+the Full and Heavy pose models, and add more games (cooperative modes fit the same API).
