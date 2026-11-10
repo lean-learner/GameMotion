@@ -25,7 +25,9 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win-portable": "npm run build && electron-builder --win zip -c.win.signAndEditExecutable=false",
     "release": "node scripts/release.mjs",
-    "icons": "python3 scripts/make-icons.py"
+    "icons": "python3 scripts/make-icons.py",
+    "install:desktop": "node scripts/install-desktop.mjs",
+    "uninstall:desktop": "node scripts/install-desktop.mjs --uninstall"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0"

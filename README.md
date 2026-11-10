@@ -40,6 +40,8 @@ npm run dist:win         # on Windows: installer + portable zip
 npm run dist:mac         # on macOS: DMGs for Intel and Apple Silicon
 npm run dist:linux       # on Linux: AppImage + tar.gz
 npm run icons            # regenerate the app icon (scripts/make-icons.py, needs Pillow)
+npm run install:desktop  # Linux: copy the AppImage to ~/Applications, add app-menu entry + desktop icon
+npm run uninstall:desktop
 ```
 
 **GitHub Actions** (`.github/workflows/build.yml`) tests and packages natively on

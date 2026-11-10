@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -22,18 +22,72 @@ function quote(arg: string): string {
   return /^[A-Za-z0-9_/.:=+-]+$/.test(arg) ? arg : `"${arg.replace(/(["`$\\])/g, '\\$1')}"`
 }
 
-/** Builds the .desktop entry for the given command line. */
-export function desktopEntry(command: string[]): string {
-  return [
+/** Builds a .desktop entry for the given command line. */
+export function desktopEntry(
+  command: string[],
+  kind: 'autostart' | 'launcher' = 'autostart'
+): string {
+  const lines = [
     '[Desktop Entry]',
     'Type=Application',
     'Name=GameMotion',
-    'Comment=Local motion games with your webcam',
+    'Comment=Play motion games with your body and a webcam, fully offline',
     `Exec=${command.map(quote).join(' ')}`,
-    'Terminal=false',
-    'X-GNOME-Autostart-enabled=true',
-    ''
-  ].join('\n')
+    'Icon=gamemotion',
+    'Terminal=false'
+  ]
+  if (kind === 'autostart') lines.push('X-GNOME-Autostart-enabled=true')
+  else {
+    lines.push(
+      'Categories=Game;',
+      'Keywords=game;motion;webcam;fitness;party;',
+      // Electron sets this window class from package.json "desktopName", so the
+      // dock links the running window to this entry.
+      'StartupWMClass=gamemotion'
+    )
+  }
+  return lines.join('\n') + '\n'
+}
+
+function dataHome(): string {
+  return process.env['XDG_DATA_HOME'] || join(homedir(), '.local', 'share')
+}
+
+/** Where the Linux app-menu entry, desktop icon and icon file go. */
+export function shortcutPaths(desktopDir: string): {
+  menuEntry: string
+  desktopIcon: string
+  icon: string
+} {
+  return {
+    menuEntry: join(dataHome(), 'applications', 'gamemotion.desktop'),
+    desktopIcon: join(desktopDir, 'GameMotion.desktop'),
+    icon: join(dataHome(), 'icons', 'hicolor', '512x512', 'apps', 'gamemotion.png')
+  }
+}
+
+export function hasShortcuts(desktopDir: string): boolean {
+  const p = shortcutPaths(desktopDir)
+  return existsSync(p.menuEntry) || existsSync(p.desktopIcon)
+}
+
+/**
+ * Adds GameMotion to the Linux app menu (and dock search) and puts an icon on
+ * the desktop, launching `command`. The caller marks the desktop file trusted.
+ */
+export function installShortcuts(
+  command: string[],
+  iconFile: string,
+  desktopDir: string
+): string[] {
+  const p = shortcutPaths(desktopDir)
+  for (const f of [p.menuEntry, p.desktopIcon, p.icon]) mkdirSync(dirname(f), { recursive: true })
+  copyFileSync(iconFile, p.icon)
+  const entry = desktopEntry(command, 'launcher')
+  writeFileSync(p.menuEntry, entry)
+  writeFileSync(p.desktopIcon, entry)
+  chmodSync(p.desktopIcon, 0o755)
+  return [p.menuEntry, p.desktopIcon]
 }
 
 /**

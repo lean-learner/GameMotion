@@ -43,6 +43,7 @@ const ui = {
   playerNames: $<HTMLDivElement>('player-names'),
   startFullscreen: $<HTMLInputElement>('start-fullscreen'),
   autostart: $<HTMLInputElement>('autostart'),
+  addShortcuts: $<HTMLButtonElement>('add-shortcuts'),
   toggle: $<HTMLButtonElement>('toggle'),
   cameraSelect: $<HTMLSelectElement>('camera-select'),
   poseModel: $<HTMLSelectElement>('pose-model'),
@@ -677,6 +678,28 @@ window.addEventListener('keydown', (e) => {
   if (mode === 'game') void enterLauncher()
   else if (mode === 'launcher') enterSettings()
 })
+// Linux AppImage: one click adds GameMotion to the app menu and the desktop.
+async function renderShortcuts(): Promise<void> {
+  const s = await window.gameMotion.shortcuts.status().catch(() => null)
+  ui.addShortcuts.hidden = !s?.supported
+  if (s)
+    ui.addShortcuts.textContent = s.installed
+      ? 'Update desktop shortcut'
+      : 'Add to desktop & app menu'
+}
+ui.addShortcuts.addEventListener('click', () => {
+  ui.addShortcuts.disabled = true
+  void window.gameMotion.shortcuts
+    .install()
+    .then(() => showMessage('GameMotion is now on your desktop and in the app menu.'))
+    .catch((err) => showMessage(`Could not add shortcuts: ${String(err)}`, true))
+    .finally(() => {
+      ui.addShortcuts.disabled = false
+      void renderShortcuts()
+    })
+})
+void renderShortcuts()
+
 ui.startFullscreen.addEventListener('change', () => {
   void window.gameMotion.store.setSettings({ startFullscreen: ui.startFullscreen.checked })
 })

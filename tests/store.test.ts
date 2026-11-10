@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   autostartFile,
   desktopEntry,
+  hasShortcuts,
+  installShortcuts,
   isAutostartEnabled,
   setAutostart
 } from '../src/main/autostart'
@@ -127,5 +129,27 @@ describe.runIf(process.platform === 'linux')('auto-start (Linux)', () => {
     expect(readFileSync(autostartFile(), 'utf8')).toContain('Exec=/opt/GameMotion.AppImage')
     setAutostart(false, [])
     expect(existsSync(autostartFile())).toBe(false)
+  })
+})
+
+describe.runIf(process.platform === 'linux')('desktop shortcuts (Linux AppImage)', () => {
+  const old = process.env.XDG_DATA_HOME
+  afterEach(() => {
+    process.env.XDG_DATA_HOME = old
+  })
+
+  it('adds an app-menu entry, a desktop icon and the icon file (temp folders)', () => {
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'gm-data-'))
+    const desktop = mkdtempSync(join(tmpdir(), 'gm-desktop-'))
+    const iconSrc = join(desktop, 'src.png')
+    writeFileSync(iconSrc, 'png')
+    expect(hasShortcuts(desktop)).toBe(false)
+    const [menu, icon] = installShortcuts(['/opt/My Apps/GameMotion.AppImage'], iconSrc, desktop)
+    expect(hasShortcuts(desktop)).toBe(true)
+    const entry = readFileSync(menu, 'utf8')
+    expect(entry).toContain('Exec="/opt/My Apps/GameMotion.AppImage"')
+    expect(entry).toContain('Categories=Game;')
+    expect(entry).toContain('StartupWMClass=gamemotion')
+    expect(readFileSync(icon, 'utf8')).toBe(entry)
   })
 })

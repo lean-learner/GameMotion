@@ -27,6 +27,16 @@ To check a download, compare it with `SHA256SUMS.txt`
 (`sha256sum -c SHA256SUMS.txt` on Linux, `shasum -a 256 <file>` on macOS,
 `Get-FileHash <file>` in Windows PowerShell).
 
+## Desktop shortcut
+
+- **Windows:** the installer adds Start menu and desktop shortcuts.
+- **macOS:** after dragging GameMotion to Applications, find it in Launchpad. Right-click
+  its Dock icon → _Options_ → _Keep in Dock_.
+- **Linux (AppImage):** put the AppImage where you want to keep it (e.g. `~/Applications`),
+  start it, open **Settings** and click **Add to desktop & app menu**. GameMotion then
+  appears in the app grid and search (right-click → _Pin to Dash_), plus an icon on the
+  desktop. If you move the AppImage later, click the button again.
+
 ## First start
 
 1. Allow camera access when asked (macOS asks once; on Windows check

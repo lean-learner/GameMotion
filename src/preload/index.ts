@@ -19,6 +19,10 @@ contextBridge.exposeInMainWorld('gameMotion', {
       ipcRenderer.invoke('settings:set', change)
   },
   quit: () => ipcRenderer.invoke('app:quit'),
+  shortcuts: {
+    status: () => ipcRenderer.invoke('app:shortcuts-status'),
+    install: () => ipcRenderer.invoke('app:install-shortcuts')
+  },
   testReport: {
     save: (json: string) => ipcRenderer.invoke('test-report:save', json)
   },

@@ -7,7 +7,8 @@ import { resolveAppPath, mimeFor, originOf, APP_SCHEME, APP_HOST } from './appPr
 import { setupSelfTest } from './selfTest'
 import { CameraTuning } from './cameraTuning'
 import { addScore, cleanName, cleanReach, Store } from './store'
-import { isAutostartEnabled, setAutostart } from './autostart'
+import { execFile } from 'node:child_process'
+import { hasShortcuts, installShortcuts, isAutostartEnabled, setAutostart } from './autostart'
 
 // Serve the production renderer from a privileged custom scheme instead of
 // file://. It gives the page a real, secure origin, which module workers,
@@ -258,6 +259,30 @@ function registerStoreIpc(): void {
     }
     if (typeof c.autostart === 'boolean') applyAutostart(c.autostart)
     return view()
+  })
+  // Linux AppImage: add an app-menu entry and a desktop icon (Windows' installer
+  // and macOS' Applications folder already cover this).
+  ipcMain.handle('app:shortcuts-status', (e) => {
+    guard(e)
+    const supported = process.platform === 'linux' && !!process.env['APPIMAGE']
+    return { supported, installed: supported && hasShortcuts(app.getPath('desktop')) }
+  })
+  ipcMain.handle('app:install-shortcuts', async (e) => {
+    guard(e)
+    if (process.platform !== 'linux' || !process.env['APPIMAGE']) {
+      throw new Error('Only needed for the Linux AppImage')
+    }
+    const [, desktopIcon] = installShortcuts(
+      [process.env['APPIMAGE']],
+      icon,
+      app.getPath('desktop')
+    )
+    // GNOME's desktop icons only launch files marked as trusted.
+    await new Promise<void>((resolve) =>
+      execFile('gio', ['set', desktopIcon, 'metadata::trusted', 'true'], () => resolve())
+    )
+    console.log('[main] added GameMotion to the app menu and desktop')
+    return { supported: true, installed: true }
   })
   ipcMain.handle('app:quit', (e) => {
     guard(e)

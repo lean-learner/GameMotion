@@ -52,6 +52,11 @@ declare global {
         setSettings(change: { startFullscreen?: boolean; autostart?: boolean }): Promise<StoreView>
       }
       quit(): Promise<void>
+      /** Linux AppImage only: app-menu entry + desktop icon. */
+      shortcuts: {
+        status(): Promise<{ supported: boolean; installed: boolean }>
+        install(): Promise<{ supported: boolean; installed: boolean }>
+      }
       testReport: {
         /** Saves a guided-test report (JSON); resolves to the file path. */
         save(json: string): Promise<string>
