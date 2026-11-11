@@ -73,8 +73,8 @@ export const DEFAULT_STEPS: StepDef[] = [
   },
   {
     id: 'dwell',
-    title: 'Dwell button',
-    instruction: 'Move a cursor onto the TEST button and hold it there until it fills',
+    title: 'Select a button',
+    instruction: 'Point at the TEST button and hold until it fills',
     timeoutMs: 15000,
     expect: { kind: 'dwell', target: 'test' },
     dwellTargets: ['test']

@@ -4,7 +4,7 @@ import { Calibrator, type Calibration } from './calibration'
 import { CursorTracker, DEFAULT_REACH, type HandRelative, type ReachZone } from './cursor'
 import { PostureDetector } from './posture'
 import { SwipeDetector } from './swipe'
-import type { InputEvent, MotionSnapshot, Side, Vec2 } from './types'
+import type { HandCursor, InputEvent, MotionSnapshot, Side, Vec2 } from './types'
 
 /**
  * Swipes are tracked only while the wrist is above lower-chest height (this many
@@ -65,7 +65,7 @@ export class MotionInput {
   }
 
   /** Cursor position extrapolated to `now`, for drawing at display rate. */
-  predictCursor(side: Side, now: number): Vec2 | null {
+  predictCursor(side: Side, now: number): HandCursor | null {
     return this.cursors[side].predict(now)
   }
 

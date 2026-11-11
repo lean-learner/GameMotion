@@ -12,68 +12,67 @@
 
   <body>
     <header class="toolbar">
-      <h1>GameMotion <span>settings &amp; diagnostics</span></h1>
+      <h1>GameMotion <span>settings</span></h1>
       <label>
         Camera
         <select id="camera-select"></select>
       </label>
       <label>
-        Pose model
+        Tracking quality
         <select id="pose-model">
-          <option value="full" selected>Full</option>
-          <option value="lite">Lite</option>
-          <option value="heavy">Heavy (most accurate)</option>
+          <option value="full" selected>Balanced</option>
+          <option value="lite">Fast</option>
+          <option value="heavy">Most accurate</option>
         </select>
       </label>
       <label>
-        Execution
+        Run on
         <select id="delegate">
-          <option value="auto" selected>Auto (GPU, CPU fallback)</option>
-          <option value="GPU">GPU only</option>
-          <option value="CPU">CPU only</option>
+          <option value="auto" selected>Auto</option>
+          <option value="GPU">Graphics card (GPU)</option>
+          <option value="CPU">Processor (CPU)</option>
         </select>
       </label>
       <label>
-        Max rate
+        Tracking rate
         <select id="max-hz">
           <option value="0" selected>Every frame</option>
-          <option value="30">30 Hz cap</option>
-          <option value="15">15 Hz cap</option>
+          <option value="30">30 per second</option>
+          <option value="15">15 per second</option>
         </select>
       </label>
       <div class="checks">
         <label
           class="check"
-          title="Only while tracking: stops the webcam lowering its frame rate in dim light. The original camera setting is restored afterwards."
+          title="Stops the webcam slowing down in dim light while you play. Your camera setting is put back afterwards."
         >
-          <input id="hold-fps" type="checkbox" checked /> Hold 30 fps in low light
+          <input id="hold-fps" type="checkbox" checked /> Stay smooth in dim light
+        </label>
+        <label class="check" title="Brightens the camera picture you see when the room is dark.">
+          <input id="brighten" type="checkbox" checked /> Brighten a dark picture
         </label>
         <label
           class="check"
-          title="Brightens the displayed picture on the GPU when it is dark. Tracking uses the original frames."
+          title="Shows your hand cursors, lean and crouch meters and detected gestures on the camera picture."
         >
-          <input id="brighten" type="checkbox" checked /> Auto-brighten display
-        </label>
-        <label
-          class="check"
-          title="Shows hand cursors, dwell buttons, lean/crouch meters and detected gestures."
-        >
-          <input id="input-test" type="checkbox" checked /> Motion input test layer
+          <input id="input-test" type="checkbox" checked /> Show motion overlay
         </label>
       </div>
-      <button id="play" type="button" class="primary">Open launcher</button>
-      <button id="guided" type="button">Run guided test</button>
-      <button id="toggle" type="button" class="primary">Start tracking</button>
+      <button id="play" type="button" class="primary">Play</button>
+      <button id="guided" type="button">Test my setup</button>
+      <button id="toggle" type="button" class="primary">Start camera</button>
     </header>
     <section class="settings" aria-label="Players and app settings">
       <span class="settings-title">Players</span>
       <div id="player-names" class="player-names"></div>
-      <label class="check"><input id="start-fullscreen" type="checkbox" /> Start fullscreen</label>
-      <label class="check" title="Adds GameMotion to ~/.config/autostart while switched on">
-        <input id="autostart" type="checkbox" /> Start on login
+      <label class="check"
+        ><input id="start-fullscreen" type="checkbox" /> Open in full screen</label
+      >
+      <label class="check" title="GameMotion opens by itself when you log in">
+        <input id="autostart" type="checkbox" /> Open when I log in
       </label>
       <button id="add-shortcuts" type="button" hidden>Add to desktop &amp; app menu</button>
-      <span class="settings-hint">Esc: game → launcher → this view · F11: fullscreen</span>
+      <span class="settings-hint">Esc: back to games · F11: full screen</span>
     </section>
 
     <main class="stage-wrap">

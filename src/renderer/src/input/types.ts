@@ -16,6 +16,29 @@ export interface CursorState {
   y: number
   /** Where the value came from: hand landmarks (precise) or the body pose (fallback). */
   source: 'hand' | 'pose'
+  /**
+   * Which way the hand points (wrist to fingers), in radians on screen:
+   * 0 = right, PI/2 = down. Undefined when it can't be told.
+   */
+  angle?: number
+  /**
+   * Whether the hand is closed into a fist (used to press buttons). Undefined
+   * when hand tracking can't see the fingers, so it can't be told.
+   */
+  fist?: boolean
+}
+
+/** A hand cursor for drawing and pressing: a position plus, when known, direction and grip. */
+export interface HandCursor extends Vec2 {
+  angle?: number
+  fist?: boolean
+  /**
+   * The hand's position for action games, in the same 0..1 screen space but
+   * mapped like a mirror (see playMap in cursor.ts) and NOT clamped: it can
+   * leave the screen, so a wide swing keeps its speed instead of stopping at
+   * the edge. Menus use x/y.
+   */
+  play?: Vec2
 }
 
 export type CalibrationStatus = 'waiting' | 'holding' | 'calibrated'

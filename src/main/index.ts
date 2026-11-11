@@ -6,7 +6,7 @@ import icon from '../../resources/icon.png?asset'
 import { resolveAppPath, mimeFor, originOf, APP_SCHEME, APP_HOST } from './appProtocol'
 import { setupSelfTest } from './selfTest'
 import { CameraTuning } from './cameraTuning'
-import { addScore, cleanName, cleanReach, Store } from './store'
+import { addScore, cleanCamera, cleanName, cleanReach, Store } from './store'
 import { execFile } from 'node:child_process'
 import { hasShortcuts, installShortcuts, isAutostartEnabled, setAutostart } from './autostart'
 
@@ -252,10 +252,14 @@ function registerStoreIpc(): void {
   })
   ipcMain.handle('settings:set', (e, change: unknown) => {
     guard(e)
-    const c = (change ?? {}) as { startFullscreen?: unknown; autostart?: unknown }
+    const c = (change ?? {}) as { startFullscreen?: unknown; autostart?: unknown; camera?: unknown }
     if (typeof c.startFullscreen === 'boolean') {
       const startFullscreen = c.startFullscreen
       store.update((d) => ({ ...d, settings: { ...d.settings, startFullscreen } }))
+    }
+    if (c.camera !== undefined) {
+      const camera = cleanCamera(c.camera)
+      store.update((d) => ({ ...d, settings: { ...d.settings, camera } }))
     }
     if (typeof c.autostart === 'boolean') applyAutostart(c.autostart)
     return view()
@@ -283,6 +287,11 @@ function registerStoreIpc(): void {
     )
     console.log('[main] added GameMotion to the app menu and desktop')
     return { supported: true, installed: true }
+  })
+  ipcMain.handle('app:exit-fullscreen', (e) => {
+    guard(e)
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (win?.isFullScreen()) win.setFullScreen(false)
   })
   ipcMain.handle('app:quit', (e) => {
     guard(e)

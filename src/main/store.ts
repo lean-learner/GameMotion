@@ -45,12 +45,29 @@ export interface ScoreEntry {
   date: string
 }
 
+/** The camera the player last picked. The label is the fallback when the id changes. */
+export interface CameraChoice {
+  deviceId: string
+  label: string
+}
+
 export interface Settings {
   startFullscreen: boolean
+  camera: CameraChoice | null
+}
+
+/** A valid camera choice, or null. */
+export function cleanCamera(c: unknown): CameraChoice | null {
+  if (!c || typeof c !== 'object') return null
+  const { deviceId, label } = c as Record<string, unknown>
+  if (typeof deviceId !== 'string' || typeof label !== 'string') return null
+  if (deviceId.length > 200 || label.length > 200) return null
+  if (!deviceId && !label) return null
+  return { deviceId, label }
 }
 
 export interface StoreData {
-  version: 1
+  version: 2
   activeSlot: number
   slots: Slot[]
   /** Top scores per game id, best first. */
@@ -73,11 +90,11 @@ const GAME_ID = /^[a-z0-9-]{1,40}$/
 
 export function defaultData(): StoreData {
   return {
-    version: 1,
+    version: 2,
     activeSlot: 0,
     slots: SLOT_COLORS.map((color, id) => ({ id, name: `Player ${id + 1}`, color })),
     scores: {},
-    settings: { startFullscreen: false }
+    settings: { startFullscreen: true, camera: null }
   }
 }
 
@@ -115,7 +132,11 @@ export function sanitize(raw: unknown): StoreData {
     }
   }
   if (r.settings && typeof r.settings === 'object') {
-    d.settings.startFullscreen = r.settings.startFullscreen === true
+    // Full screen is the default. Files from before that default (version 1) are
+    // switched over once; after that the player's own choice is kept.
+    d.settings.startFullscreen =
+      (r.version as number) >= 2 ? r.settings.startFullscreen !== false : true
+    d.settings.camera = cleanCamera(r.settings.camera)
   }
   return d
 }

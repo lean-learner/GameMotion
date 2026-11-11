@@ -72,7 +72,7 @@ npm run build   # assets + typecheck + production bundle in out/
 npm run release       # packaged builds for this OS (see "Building releases")
 ```
 
-In the app: pick a camera, then **Start tracking** / **Stop tracking**. F11 toggles
+In the app: pick a camera, then **Start camera** / **Stop camera**. F11 toggles
 fullscreen. Stop releases the camera. Models stay loaded, so restarting is fast.
 
 Settings in the toolbar:
@@ -129,17 +129,17 @@ stop then restart). A test clip can be made from any image or video with:
 
 ### Manual hardware checks (need a person in front of the webcam)
 
-1. `npm start`, click **Start tracking**, and allow camera access if asked.
+1. `npm start`, click **Start camera**, and allow camera access if asked.
 2. The diagnostics should show camera `1280x720 @ 30 fps`, Camera FPS ≈ 30, Execution `GPU`.
 3. Step back until your whole body is visible. The skeleton should follow your arms and legs.
 4. **Handedness:** raise only your _right_ hand. Its label should read **Right hand**
    (confirmed on 2026-11-09).
 
 5. Move quickly. The overlay should stay on your limbs, and Latency should stay well under 50 ms.
-6. Click **Stop tracking**. Your webcam's activity LED should turn off.
+6. Click **Stop camera**. Your webcam's activity LED should turn off.
    Start again: tracking should resume without reloading models.
-7. Unplug the webcam while tracking. You should see "The camera was disconnected." and no crash.
-8. Start while another app holds the camera. You should see "...may be in use by another application."
+7. Unplug the webcam while tracking. You should see "Camera unplugged. Plug it back in to keep playing." and no crash.
+8. Start while another app holds the camera. You should see "The camera is busy. Close other apps that use it..."
 9. Switch Execution to _CPU only_ and confirm it still tracks, at a lower rate.
 10. Disconnect from the network, restart the app, and repeat step 3 (the offline check).
 
@@ -261,8 +261,6 @@ stop/restart (webcam LED off) were confirmed by hand.
   tests on test clips. The camera-busy and unplug paths are coded but untested.
 - MediaPipe logs a harmless `NORM_RECT without IMAGE_DIMENSIONS` warning for
   non-square frames, and Chromium logs a harmless Wayland/Vulkan warning. WebGL2 works.
-- The camera choice is not remembered between launches.
-- One player only (`numPoses: 1`).
 
 ## Milestone 2: Motion input
 
@@ -348,12 +346,15 @@ tracking. Everything in the launcher works by hand cursor (hold 1 s) or mouse cl
 
 - **Who is playing?** Four colour-coded player slots. The selected one is highlighted
   and remembered.
-- **Games:** one tile per game with its best score, plus a top-5 table. Balloon Pop
-  saves each finished round for the current player and shows "New personal best!" and
-  the top scores at game over.
+- **Games:** one picture tile per game with its best score. Each game shows the top
+  scores at game over.
+- **Camera choice is remembered:** the camera picked in the settings view is used on the
+  next launch. It's matched by device id, then by name (ids can change). If it's
+  unplugged, the first camera is used and the choice is kept for next time.
 - **Settings** opens the desktop view (diagnostics, test tools, settings strip).
   **Exit** needs a 2-second hold.
-- **Esc** steps back: game → launcher → settings view. **F11** toggles fullscreen.
+- **Esc** goes back to the launcher (from a game or from settings); in the launcher it
+  leaves full screen. **F11** toggles full screen. Settings opens from its launcher tile.
 
 **Settings view** (the old diagnostics page) adds a strip with player names (typed at
 the PC), **Start fullscreen** and **Start on login**. Start on login is off by default.
@@ -432,6 +433,56 @@ narrow view. The avatar follows you on the menu, so you can try the controls fir
 Versus: two avatars in player colours; the higher score wins. Scores go to
 `meteor-dodge` / `meteor-dodge-2p`. Hands are only used for menus and the pause button.
 
+### Console-style launcher
+
+The launcher is a dashboard of rounded tiles in a dark, green-accented palette
+(`THEME` in `games/ui.ts`; the settings view uses the same colours): a row of game
+picture tiles, a row of players, and a row of options. A tile grows and gets a white
+frame when a hand cursor is on it, and fills as its timer runs. It also works
+with the mouse, with **arrow keys + Enter**, and with a **gamepad** (D-pad or left stick,
+A to press). Exit sits top-right and needs a longer hold.
+
+### Selecting: hover timer, fist is faster
+
+Tiles and buttons are pressed by holding the cursor on them: hovering always starts a
+timer that fills on the tile (1 s; Exit 2 s, in-game pause 1.5 s), and the tile is
+selected when it completes. Nothing is selected without the timer. Closing the hand into
+a **fist** fills the same timer twice as fast (`FIST_SPEED` in `input/dwell.ts`). A fist
+is "at least 3 of 4 fingertips no further from the wrist than their middle joints", held
+for 2 tracking frames (`isFist` in `input/body.ts`). After a press the cursor must leave
+the tile before it can press again.
+
+### Wording and flow
+
+Player-facing text is short and action-first ("Step in front of the camera", "Point at a
+tile and hold · Make a fist to go faster"). The launcher's hint line shows the one thing
+to do next, including camera problems. Each game's first screen has three short lines
+and a reminder of how to choose; Pause and Game over go straight **Home**. The app opens
+in **full screen** by default (Settings → "Open in full screen" turns it off; data files
+from before this default are switched over once).
+
+### Karate-chop hands (in games)
+
+Menus use the palm cursor as before (each hand reaches the whole screen from a small box
+around its own shoulder). During a round of Balloon Pop or Fruit Chop each hand is a
+**blade**, and three things differ (`games/blade.ts`, `playMap` in `input/cursor.ts`):
+
+- **Mirror mapping:** one zone centred on the body, shared by both hands, an arm's length
+  past each shoulder. Your left hand is on the left of the screen, and the same hand
+  travel moves the blade the same distance whichever way it goes.
+- **Not clamped:** the blade can leave the screen, so a wide swing keeps its speed (and
+  keeps cutting) instead of stopping dead at the edge.
+- **Aimed along its motion:** the blade points the way the hand is travelling, not the way
+  the fingers point, which this camera can't tell reliably for an edge-on hand.
+
+### Fruit Chop (third game)
+
+Fruit is tossed up from below and falls back; **chop** it with a fast hand before it
+drops. Solo: 3 lives, a dropped fruit or a chopped bomb costs one, and it gets harder
+over 90 s. Versus: 60 s on a shared field, bombs cost 50 points. Three or more fruits in
+one stroke earn a bonus; gold stars are worth 50. Scores go to `fruit-chop` /
+`fruit-chop-2p`. Rules are in `games/fruitChop/logic.ts` (unit-tested).
+
 ### Auto-pause fix
 
 Auto-pause now needs positive evidence (tracking says the shoulders aren't visible). Old
@@ -441,5 +492,6 @@ after a fresh build was intermittently pausing games.
 ## Next milestone
 
 All five planned milestones are built, plus the extras above. Still needed with real
-players: swipe speed (`MIN_POP_SPEED`), Meteor Dodge difficulty, Versus framing with
+players: chop feel and speed (`MIN_POP_SPEED`, `MIN_CHOP_SPEED`), Fruit Chop
+and Meteor Dodge difficulty, Versus framing with
 two people on the C270, and Full vs Heavy pose models.

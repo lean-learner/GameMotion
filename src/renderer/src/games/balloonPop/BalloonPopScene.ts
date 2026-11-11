@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
-import type { Vec2 } from '../../input/types'
+import type { HandCursor, Vec2 } from '../../input/types'
+import { BLADE_LENGTH, BladeAim, bladePoint } from '../blade'
 import type { Sfx } from '../sfx'
 import type { GameServices, Player } from '../types'
 import {
@@ -36,6 +37,8 @@ const TEX_R = 60
 const OUT_OF_VIEW_MS = 1000
 /** The pause button needs a longer hold, so it isn't pressed by accident while popping. */
 const PAUSE_BUTTON: Button = { id: 'pause', label: 'II', x: 0.905, y: 0.03, w: 0.08, h: 0.11 }
+/** Shown on the first screen, so new players know how buttons work. */
+const HOW_TO_CHOOSE = 'Point and hold to choose  ·  a fist is faster'
 /** Score tables: versus rounds are kept apart from single-player ones. */
 const tableId = (players: number): string => (players > 1 ? 'balloon-pop-2p' : 'balloon-pop')
 
@@ -52,6 +55,7 @@ export class BalloonPopScene extends Phaser.Scene {
   private pauseButton!: DwellButtons
   private cursorLayer!: CursorLayer
   private trails!: TrailLayer
+  private readonly aim = new BladeAim()
   /** Increments every round, so a late score-save result can't land on the wrong screen. */
   private round = 0
   private shownPhase: Phase | null = null
@@ -139,8 +143,14 @@ export class BalloonPopScene extends Phaser.Scene {
 
   update(): void {
     const now = performance.now()
-    const px = (v: Vec2 | null): Vec2 | null => (v ? { x: v.x * W, y: v.y * H } : null)
+    // During a round each hand is a blade (karate chop), placed like a mirror image of
+    // the player's hand and pointing the way it moves. In menus it is the usual cursor.
+    const chopping = this.logic.phase === 'playing' || this.logic.phase === 'countdown'
+    const px = (v: HandCursor | null): Vec2 | null =>
+      chopping ? bladePoint(v, W, H) : v ? { x: v.x * W, y: v.y * H } : null
     const hands: HandInput[] = []
+    const angles: (number | undefined)[] = []
+    const fists: (boolean | undefined)[] = []
     const screenHands: (Vec2 | null)[] = []
     this.players.forEach((_, player) => {
       const c = this.services.input.cursors(now, player)
@@ -149,7 +159,13 @@ export class BalloonPopScene extends Phaser.Scene {
         { player, hand: 'right', pos: px(c.right) }
       )
       screenHands.push(c.left, c.right)
+      fists.push(chopping ? undefined : c.left?.fist, chopping ? undefined : c.right?.fist)
     })
+
+    for (const h of hands) {
+      const angle = this.aim.aim(`${h.player}:${h.hand}`, chopping ? h.pos : null)
+      angles.push(chopping && h.pos ? angle : undefined)
+    }
 
     this.autoPause(now)
     const { pops, bumps, bonuses, strokes } = this.logic.update(now, hands)
@@ -165,7 +181,13 @@ export class BalloonPopScene extends Phaser.Scene {
     // Any player can press menu buttons.
     const pressed = this.menu.update(now, screenHands) ?? this.pauseButton.update(now, screenHands)
     if (pressed) this.act(pressed)
-    const styles = hands.map((h) => this.cursorStyle(h, now))
+    const styles = hands.map((h, i) => {
+      const angle = angles[i]
+      const style = this.cursorStyle(h, now)
+      return angle === undefined
+        ? { ...style, fist: fists[i] }
+        : { ...style, blade: { angle, length: BLADE_LENGTH } }
+    })
     this.trails.draw(
       now,
       hands.map((h, i) => ({
@@ -293,21 +315,18 @@ export class BalloonPopScene extends Phaser.Scene {
       case 'menu':
         dim()
         title(this.versus ? 'Balloon Pop Versus' : 'Balloon Pop')
+        line(this.versus ? `${names[0]}  vs  ${names[1]}` : names[0], 0.36, 28, '#d7ecff')
+        line('Chop through the balloons with a fast hand.', 0.45, 34)
         line(
-          this.versus ? `${names[0]} (left)  vs  ${names[1]} (right)` : `Playing as ${names[0]}`,
-          0.36,
-          28
+          this.versus
+            ? '60 seconds  ·  Most points wins'
+            : '60 seconds  ·  Quick pops build combos',
+          0.53,
+          26
         )
-        line(
-          (this.versus
-            ? 'Pop more balloons than your rival in 60 seconds.'
-            : 'Pop as many balloons as you can in 60 seconds.') +
-            '\nSwipe through a balloon to pop it - your cursor glows when you are fast enough.',
-          0.45,
-          28
-        )
-        line('Golden balloons are worth more, and quick pops build combos.', 0.56, 24)
-        buttons = [btn('start', 'Start', 0.38, 0.66), btn('quit', 'Quit', 0.66, 0.66)]
+        line('Gold balloons score more', 0.59, 24, '#ffe14d')
+        buttons = [btn('start', 'Start', 0.38, 0.66), btn('quit', 'Back', 0.66, 0.66)]
+        line(HOW_TO_CHOOSE, 0.86, 22, '#d7ecff')
         break
       case 'paused':
         dim()
@@ -315,15 +334,15 @@ export class BalloonPopScene extends Phaser.Scene {
         line(
           L.pauseReason === 'out-of-view'
             ? this.versus
-              ? 'A player stepped out of view. Both players back in frame to continue.'
-              : 'You stepped out of view. Come back into the frame to continue.'
-            : 'Take a breather.',
+              ? 'Both players step back into view'
+              : 'Step back into view'
+            : 'Ready when you are',
           0.42
         )
         buttons = [
           btn('resume', 'Resume', 0.25, 0.6, 0.22),
           btn('restart', 'Restart', 0.5, 0.6, 0.22),
-          btn('menu', 'Menu', 0.75, 0.6, 0.22)
+          btn('quit', 'Home', 0.75, 0.6, 0.22)
         ]
         break
       case 'gameover': {
@@ -348,7 +367,7 @@ export class BalloonPopScene extends Phaser.Scene {
           line(`${names[0]}: ${L.score} points  ·  ${L.popped[0]} balloons`, 0.31, 40)
         }
         this.saveScores(line)
-        buttons = [btn('again', 'Play again', 0.38, 0.8), btn('menu', 'Menu', 0.66, 0.8)]
+        buttons = [btn('again', 'Play again', 0.38, 0.8), btn('quit', 'Home', 0.66, 0.8)]
         break
       }
     }
@@ -360,7 +379,7 @@ export class BalloonPopScene extends Phaser.Scene {
   private saveScores(line: (str: string, y: number, size?: number, color?: string) => void): void {
     const round = this.round
     const status = this.add
-      .text(W / 2, H * 0.4, 'Saving scores...', {
+      .text(W / 2, H * 0.4, 'Saving…', {
         fontFamily: FONT,
         fontSize: '28px',
         color: '#ffffff'
@@ -375,13 +394,15 @@ export class BalloonPopScene extends Phaser.Scene {
       // Ignore the result if the players have already moved on.
       if (round !== this.round || this.logic.phase !== 'gameover' || !status.active) return
       if (saved.some((s) => !s)) {
-        status.setText('Score could not be saved')
+        status.setText("Couldn't save the score")
         return
       }
       const bests = this.players.flatMap((p, i) => (saved[i]!.isPersonalBest ? [p.name] : []))
       status.setText(
         bests.length
-          ? `New personal best: ${bests.join(' & ')}!`
+          ? this.versus
+            ? `New best: ${bests.join(' & ')}!`
+            : 'New best!'
           : this.versus
             ? 'Scores saved'
             : `Your best: ${saved[0]!.personalBest}`

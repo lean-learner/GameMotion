@@ -153,7 +153,8 @@ export class MeteorDodgeScene extends Phaser.Scene {
         const pos = c[side]
         draws.push({
           pos: pos && { x: pos.x * W, y: pos.y * H },
-          color: this.versus ? hex(p.color) : HAND_COLORS[side]
+          color: this.versus ? hex(p.color) : HAND_COLORS[side],
+          fist: pos?.fist
         })
       }
     })
@@ -284,25 +285,23 @@ export class MeteorDodgeScene extends Phaser.Scene {
       case 'menu':
         dim()
         text(this.versus ? 'Meteor Dodge Versus' : 'Meteor Dodge', 0.2, 80, '#ffffff', true)
-        text(
-          'LEAN left and right to move.  CROUCH to duck under laser beams.\nDodge the meteors, catch the stars - you have 3 lives.',
-          0.38,
-          28
-        )
-        buttons = [btn('start', 'Start', 0.38, 0.7), btn('quit', 'Quit', 0.62, 0.7)]
+        text('Lean to move  ·  Crouch to duck the lasers', 0.37, 34)
+        text('Dodge meteors  ·  Catch stars  ·  3 lives', 0.45, 26)
+        buttons = [btn('start', 'Start', 0.38, 0.7), btn('quit', 'Back', 0.62, 0.7)]
+        text('Point and hold to choose  ·  a fist is faster', 0.9, 22, '#b8b8b8')
         break
       case 'paused':
         dim()
         text('Paused', 0.26, 80, '#ffffff', true)
         text(
-          L.pauseReason === 'out-of-view' ? 'Step back into view to continue.' : 'Take a breather.',
+          L.pauseReason === 'out-of-view' ? 'Step back into view' : 'Ready when you are',
           0.42,
           30
         )
         buttons = [
           btn('resume', 'Resume', 0.25, 0.6),
           btn('restart', 'Restart', 0.5, 0.6),
-          btn('menu', 'Menu', 0.75, 0.6)
+          btn('quit', 'Home', 0.75, 0.6)
         ]
         break
       case 'gameover': {
@@ -324,7 +323,7 @@ export class MeteorDodgeScene extends Phaser.Scene {
           34
         )
         this.saveScores(text)
-        buttons = [btn('again', 'Play again', 0.38, 0.8), btn('menu', 'Menu', 0.62, 0.8)]
+        buttons = [btn('again', 'Play again', 0.38, 0.8), btn('quit', 'Home', 0.62, 0.8)]
         break
       }
     }
@@ -340,9 +339,10 @@ export class MeteorDodgeScene extends Phaser.Scene {
       )
     ).then((saved) => {
       if (round !== this.round || this.logic.phase !== 'gameover') return
-      if (saved.some((s) => !s)) return text('Score could not be saved', 0.42, 26)
+      if (saved.some((s) => !s)) return text("Couldn't save the score", 0.42, 26)
       const bests = this.players.flatMap((p, i) => (saved[i]!.isPersonalBest ? [p.name] : []))
-      if (bests.length) text(`New personal best: ${bests.join(' & ')}!`, 0.42, 32, '#ffe14d')
+      if (bests.length)
+        text(this.versus ? `New best: ${bests.join(' & ')}!` : 'New best!', 0.42, 32, '#ffe14d')
       const top = saved[saved.length - 1]!.top
       text(
         ['Top scores', ...top.slice(0, 3).map((r, i) => `${i + 1}.  ${r.name}   ${r.score}`)].join(
@@ -363,9 +363,9 @@ export class MeteorDodgeScene extends Phaser.Scene {
     const lines = this.players.map((p, i) => {
       const s = this.services.input.snapshot(i)
       const who = this.versus ? `${p.name}: ` : ''
-      if (!s?.tracked) return `${who}step into view`
-      if (s.calibration.status === 'calibrated') return `${who}ready - try leaning and crouching!`
-      return `${who}stand still to calibrate (${Math.round(s.calibration.progress * 100)}%)`
+      if (!s?.tracked) return `${who}Step into view`
+      if (s.calibration.status === 'calibrated') return `${who}Ready  ·  try leaning and crouching`
+      return `${who}Stand still a moment… ${Math.round(s.calibration.progress * 100)}%`
     })
     this.calibText.setText(lines.join('\n'))
   }

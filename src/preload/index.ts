@@ -15,10 +15,14 @@ contextBridge.exposeInMainWorld('gameMotion', {
     setReach: (slot: number, reach: unknown) => ipcRenderer.invoke('store:set-reach', slot, reach),
     recordScore: (game: string, score: number, slot?: number) =>
       ipcRenderer.invoke('store:record-score', game, score, slot),
-    setSettings: (change: { startFullscreen?: boolean; autostart?: boolean }) =>
-      ipcRenderer.invoke('settings:set', change)
+    setSettings: (change: {
+      startFullscreen?: boolean
+      autostart?: boolean
+      camera?: { deviceId: string; label: string } | null
+    }) => ipcRenderer.invoke('settings:set', change)
   },
   quit: () => ipcRenderer.invoke('app:quit'),
+  exitFullscreen: () => ipcRenderer.invoke('app:exit-fullscreen'),
   shortcuts: {
     status: () => ipcRenderer.invoke('app:shortcuts-status'),
     install: () => ipcRenderer.invoke('app:install-shortcuts')

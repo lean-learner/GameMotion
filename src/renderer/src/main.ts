@@ -2,10 +2,11 @@ import { DisplayBrightener } from './camera/brightness'
 import { DwellSelector, type DwellState } from './input/dwell'
 import { MotionInput } from './input/MotionInput'
 import { PlayerTracker } from './input/players'
-import type { InputEvent, MotionSnapshot, Vec2 } from './input/types'
+import type { HandCursor, InputEvent, MotionSnapshot } from './input/types'
 import { describe, InputOverlay } from './overlay/InputOverlay'
 import { GuidedTest } from './testrun/GuidedTest'
 import { balloonPop } from './games/balloonPop'
+import { fruitChop } from './games/fruitChop'
 import { meteorDodge } from './games/meteorDodge'
 import { mountLauncher } from './games/launcher'
 import { mountReachSetup } from './games/reachSetup'
@@ -19,7 +20,7 @@ import type {
   SetupServices
 } from './games/types'
 import type { StoreView } from '../../preload/index.d'
-import { CameraService, type CameraSettings } from './camera/CameraService'
+import { CameraService, pickCamera, type CameraSettings } from './camera/CameraService'
 import { OverlayRenderer } from './overlay/OverlayRenderer'
 import { bodyExtent } from './tracking/bodyCoverage'
 import { TrackingService } from './tracking/TrackingService'
@@ -95,7 +96,7 @@ const eventLog: { event: InputEvent; at: number }[] = []
 let rafHandle: number | null = null
 
 // ---- Shell: launcher, games, settings (Milestones 3-4) ---------------------------
-const GAMES: GameModule[] = [balloonPop, meteorDodge]
+const GAMES: GameModule[] = [fruitChop, balloonPop, meteorDodge]
 type Mode = 'settings' | 'launcher' | 'game'
 let mode: Mode = 'settings'
 let unmount: (() => void) | null = null
@@ -130,12 +131,19 @@ const rowsFor = (entries: { slot: number; score: number }[]): ScoreRow[] =>
  * across the screen, so game effects can be checked without a person moving.
  */
 const DEMO_INPUT = new URLSearchParams(location.search).has('demo')
-function demoCursors(now: number, player: number): { left: Vec2 | null; right: Vec2 | null } {
+function demoCursors(
+  now: number,
+  player: number
+): { left: HandCursor | null; right: HandCursor | null } {
   const t = now / 1000 + player * 1.3
   return {
     left: null,
     // Fast horizontal strokes (about 1.6 screen widths per second) drifting up and down.
-    right: { x: 0.5 + 0.48 * Math.sin(t * 3.4), y: 0.45 + 0.3 * Math.sin(t * 0.7) }
+    right: {
+      x: 0.5 + 0.48 * Math.sin(t * 3.4),
+      y: 0.45 + 0.3 * Math.sin(t * 0.7),
+      angle: -Math.PI / 2 + 0.6 * Math.cos(t * 3.4)
+    }
   }
 }
 
@@ -148,7 +156,11 @@ const gameServices: GameServices = {
             left: motions[player]?.predictCursor('left', now) ?? null,
             right: motions[player]?.predictCursor('right', now) ?? null
           },
-    snapshot: (player = 0) => snapshots[player] ?? null,
+    snapshot: (player = 0) => {
+      const snap = snapshots[player] ?? null
+      // Demo: the scripted player is always "in view", so games don't auto-pause.
+      return DEMO_INPUT && snap ? { ...snap, tracked: true } : snap
+    },
     onEvent: (listener) => {
       gameListeners.add(listener)
       return () => gameListeners.delete(listener)
@@ -201,6 +213,7 @@ const setupServices: SetupServices = {
 const launcherServices: LauncherServices = {
   ...gameServices,
   games: GAMES.map((g) => ({ id: g.id, title: g.title })),
+  problem: () => problem,
   slots: () => (storeView?.slots ?? []).map((s) => toPlayer(s.id)),
   setPlayer: async (slot, right = false) => {
     if (right) {
@@ -599,34 +612,60 @@ function readConfig(): TrackerConfig {
   }
 }
 
+/** The current camera/tracking problem, also shown by the launcher (the message bar is hidden there). */
+let problem: string | null = null
+
 function showMessage(text: string | null, isError = false): void {
+  problem = isError ? text : null
   ui.message.hidden = !text
   ui.message.textContent = text ?? ''
   ui.message.classList.toggle('error', isError)
 }
 
+/** The first camera listing; tracking waits for it so the remembered camera is selected. */
+let cameraListReady: Promise<void> = Promise.resolve()
+
 async function refreshCameraList(): Promise<void> {
-  const selected = ui.cameraSelect.value
+  const current = ui.cameraSelect.value
   const cams = await camera.listCameras()
+  if (!storeView) storeView = await window.gameMotion.store.get().catch(() => null)
+  const selected = pickCamera(cams, current, storeView?.settings.camera ?? null)
   ui.cameraSelect.replaceChildren(
     ...cams.map((c) => new Option(c.label, c.deviceId, false, c.deviceId === selected))
   )
   if (cams.length === 0) ui.cameraSelect.append(new Option('No camera found', ''))
 }
 
+/** Remembers a camera for the next launch. */
+function rememberCamera(deviceId: string, label: string): void {
+  void window.gameMotion.store
+    .setSettings({ camera: { deviceId, label } })
+    .then((v) => (storeView = v))
+    .catch((err) => console.warn('[store] could not save the camera choice:', err))
+}
+
 async function startTracking(): Promise<void> {
   busy = true
   renderControls()
   try {
-    showMessage('Opening camera...')
+    showMessage('Starting camera…')
+    await cameraListReady
     cameraSettings = await camera.open(ui.cameraSelect.value || undefined)
     ui.stage.style.setProperty('--ar', `${cameraSettings.width} / ${cameraSettings.height}`)
     overlay.resize(cameraSettings.width, cameraSettings.height)
     console.info('[camera] opened', JSON.stringify(cameraSettings))
     await refreshCameraList() // labels become available after permission
+    // Remember the first camera that works, and keep the picked camera's real name
+    // (it may have been picked before names were available). A different camera,
+    // used while the picked one is unplugged, doesn't replace the choice.
+    const saved = storeView?.settings.camera
+    if (cameraSettings.deviceId && (!saved || saved.deviceId === cameraSettings.deviceId)) {
+      if (saved?.label !== cameraSettings.label)
+        rememberCamera(cameraSettings.deviceId, cameraSettings.label)
+    }
     await applyCameraTuning(cameraSettings.label)
 
-    showMessage('Loading tracking models...')
+    showMessage('Getting ready…')
     await tracker.load(readConfig())
     startInput(cameraSettings.width / cameraSettings.height)
     tracker.start(ui.video)
@@ -653,17 +692,17 @@ function stopTracking(): void {
   overlay.clear()
   lastFrame = null
   cameraSettings = null
-  showMessage('Tracking stopped. Camera released.')
+  showMessage('Camera off.')
   renderControls()
 }
 
 function renderControls(): void {
   const running = tracker.stats.status === 'running'
-  ui.toggle.textContent = busy ? 'Starting...' : running ? 'Stop tracking' : 'Start tracking'
+  ui.toggle.textContent = busy ? 'Starting…' : running ? 'Stop camera' : 'Start camera'
   ui.toggle.classList.toggle('stop', running)
   ui.toggle.disabled = busy
   const testing = !!guided && !guided.finished
-  ui.guided.textContent = testing ? 'Stop guided test' : 'Run guided test'
+  ui.guided.textContent = testing ? 'Stop test' : 'Test my setup'
   ui.guided.disabled = busy
   for (const el of [ui.cameraSelect, ui.poseModel, ui.delegate, ui.holdFps]) {
     el.disabled = busy || running
@@ -672,27 +711,26 @@ function renderControls(): void {
 }
 
 ui.play.addEventListener('click', () => void enterLauncher())
-// Esc steps back: game -> launcher -> settings.
+// Esc goes back to the launcher (from a game or from settings); in the launcher it
+// leaves full screen. The settings view is opened only from the launcher's Settings tile.
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return
-  if (mode === 'game') void enterLauncher()
-  else if (mode === 'launcher') enterSettings()
+  if (mode === 'launcher') void window.gameMotion.exitFullscreen()
+  else void enterLauncher()
 })
 // Linux AppImage: one click adds GameMotion to the app menu and the desktop.
 async function renderShortcuts(): Promise<void> {
   const s = await window.gameMotion.shortcuts.status().catch(() => null)
   ui.addShortcuts.hidden = !s?.supported
   if (s)
-    ui.addShortcuts.textContent = s.installed
-      ? 'Update desktop shortcut'
-      : 'Add to desktop & app menu'
+    ui.addShortcuts.textContent = s.installed ? 'Update desktop shortcut' : 'Add desktop shortcut'
 }
 ui.addShortcuts.addEventListener('click', () => {
   ui.addShortcuts.disabled = true
   void window.gameMotion.shortcuts
     .install()
-    .then(() => showMessage('GameMotion is now on your desktop and in the app menu.'))
-    .catch((err) => showMessage(`Could not add shortcuts: ${String(err)}`, true))
+    .then(() => showMessage('Added. GameMotion is on your desktop and in the app menu.'))
+    .catch((err) => showMessage(`Couldn't add the shortcut: ${String(err)}`, true))
     .finally(() => {
       ui.addShortcuts.disabled = false
       void renderShortcuts()
@@ -700,6 +738,10 @@ ui.addShortcuts.addEventListener('click', () => {
 })
 void renderShortcuts()
 
+ui.cameraSelect.addEventListener('change', () => {
+  const option = ui.cameraSelect.selectedOptions[0]
+  if (option?.value) rememberCamera(option.value, option.text)
+})
 ui.startFullscreen.addEventListener('change', () => {
   void window.gameMotion.store.setSettings({ startFullscreen: ui.startFullscreen.checked })
 })
@@ -709,7 +751,7 @@ ui.autostart.addEventListener('change', () => {
     .then((v) => (ui.autostart.checked = v.autostart))
     .catch((err) => {
       ui.autostart.checked = !ui.autostart.checked
-      showMessage(`Could not change auto-start: ${String(err)}`, true)
+      showMessage(`Couldn't change that setting: ${String(err)}`, true)
     })
 })
 ui.guided.addEventListener('click', () => {
@@ -829,7 +871,7 @@ function logMetrics(): void {
 if (window.gameMotion.platform !== 'linux') {
   ui.holdFps.checked = false
   ui.holdFps.disabled = true
-  ui.holdFps.parentElement!.title = 'Only available on Linux (uses v4l2-ctl).'
+  ui.holdFps.parentElement!.title = 'Only available on Linux.'
 }
 ui.d.versions.textContent = `Electron ${window.gameMotion.versions.electron} · Chromium ${window.gameMotion.versions.chrome}`
 setInterval(renderDiagnostics, 250)
@@ -841,7 +883,9 @@ window.addEventListener('beforeunload', () => {
 })
 
 renderControls()
-void refreshCameraList().catch((err) => console.warn('[camera] enumerate failed:', err))
+cameraListReady = refreshCameraList().catch((err) =>
+  console.warn('[camera] enumerate failed:', err)
+)
 // Settings can be preset from the URL (used by the automated self-test).
 const params = new URLSearchParams(location.search)
 const preset = (el: HTMLSelectElement, key: string): void => {

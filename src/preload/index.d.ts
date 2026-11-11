@@ -21,11 +21,16 @@ export interface ScoreEntry {
   score: number
   date: string
 }
+/** The camera the player last picked; the label is the fallback when the id changes. */
+export interface CameraChoice {
+  deviceId: string
+  label: string
+}
 export interface StoreView {
   activeSlot: number
   slots: Slot[]
   scores: Record<string, ScoreEntry[]>
-  settings: { startFullscreen: boolean }
+  settings: { startFullscreen: boolean; camera: CameraChoice | null }
   autostart: boolean
 }
 export interface ScoreResult {
@@ -49,9 +54,16 @@ declare global {
         setReach(slot: number, reach: Reach | null): Promise<StoreView>
         /** Records a score for the active player slot. */
         recordScore(game: string, score: number, slot?: number): Promise<ScoreResult>
-        setSettings(change: { startFullscreen?: boolean; autostart?: boolean }): Promise<StoreView>
+        setSettings(change: {
+          startFullscreen?: boolean
+          autostart?: boolean
+          /** Remembered camera; null forgets it. */
+          camera?: CameraChoice | null
+        }): Promise<StoreView>
       }
       quit(): Promise<void>
+      /** Leaves full screen (does nothing in a window). */
+      exitFullscreen(): Promise<void>
       /** Linux AppImage only: app-menu entry + desktop icon. */
       shortcuts: {
         status(): Promise<{ supported: boolean; installed: boolean }>

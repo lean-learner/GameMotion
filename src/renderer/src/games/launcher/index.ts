@@ -12,14 +12,14 @@ export async function mountLauncher(
   const game = new Phaser.Game({
     type: Phaser.WEBGL,
     parent,
-    backgroundColor: '#10213f',
+    backgroundColor: '#0c0c0c',
     banner: false,
     audio: { noAudio: true },
+    // Fills the window at the screen's own resolution; the scene scales its layout (fillScreen).
     scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
-      width: 1280,
-      height: 720
+      mode: Phaser.Scale.RESIZE,
+      width: parent.clientWidth || 1280,
+      height: parent.clientHeight || 720
     },
     scene: new LauncherScene(services)
   })

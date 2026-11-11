@@ -1,4 +1,4 @@
-import type { InputEvent, MotionSnapshot, Side, Vec2 } from '../input/types'
+import type { HandCursor, InputEvent, MotionSnapshot, Side } from '../input/types'
 
 export interface Player {
   slot: number
@@ -30,7 +30,7 @@ export interface GameServices {
      * A player's hand cursors (0..1 screen space) predicted to `now`; call once
      * per rendered frame. `player` defaults to 0 (the only player in 1-player mode).
      */
-    cursors(now: number, player?: number): Record<Side, Vec2 | null>
+    cursors(now: number, player?: number): Record<Side, HandCursor | null>
     /** A player's latest motion state (calibration, tracked, lean, crouch). */
     snapshot(player?: number): MotionSnapshot | null
     /** Subscribe to gesture events of every player; returns an unsubscribe function. */
@@ -58,6 +58,8 @@ export interface SetupServices extends GameServices {
 /** Extra services for the launcher. */
 export interface LauncherServices extends GameServices {
   games: { id: string; title: string }[]
+  /** A camera or tracking problem to show the player, if there is one. */
+  problem(): string | null
   /** All four player slots. */
   slots(): Player[]
   /** Chooses the (left) player; in 2-player mode `right` chooses the right player. */

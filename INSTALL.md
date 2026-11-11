@@ -45,7 +45,7 @@ To check a download, compare it with `SHA256SUMS.txt`
 3. Raise a hand: a cursor appears. Hold it on a button for 1 second to press it
    (a mouse click works too).
 4. Optional: **Reach setup** fits the cursor to your arm reach.
-5. **Esc** goes back (game → launcher → settings). **F11** toggles fullscreen.
+5. **Esc** goes back to the launcher; in the launcher it leaves full screen. **F11** toggles full screen.
 
 ## Unsigned-app warnings
 

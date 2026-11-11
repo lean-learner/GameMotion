@@ -5,7 +5,27 @@ export interface CameraInfo {
   label: string
 }
 
+/**
+ * Which listed camera to select: the one already selected, else the remembered
+ * one (by id, then by name, since ids can change), else the first.
+ */
+export function pickCamera(
+  cams: CameraInfo[],
+  current: string,
+  saved: { deviceId: string; label: string } | null
+): string {
+  if (current && cams.some((c) => c.deviceId === current)) return current
+  if (saved) {
+    const byId = saved.deviceId && cams.find((c) => c.deviceId === saved.deviceId)
+    if (byId) return byId.deviceId
+    const byLabel = saved.label && cams.find((c) => c.label === saved.label)
+    if (byLabel) return byLabel.deviceId
+  }
+  return cams[0]?.deviceId ?? ''
+}
+
 export interface CameraSettings {
+  deviceId: string
   label: string
   width: number
   height: number
@@ -28,19 +48,22 @@ export function describeCameraError(err: unknown): CameraError {
   switch (name) {
     case 'NotAllowedError':
     case 'SecurityError':
-      return new CameraError('Camera permission was denied.', name)
+      return new CameraError(
+        'Camera access is blocked. Allow the camera for GameMotion, then try again.',
+        name
+      )
     case 'NotFoundError':
     case 'OverconstrainedError':
-      return new CameraError('No usable camera was found. Check that a webcam is connected.', name)
+      return new CameraError('No camera found. Plug in a webcam, then try again.', name)
     case 'NotReadableError':
     case 'AbortError':
       return new CameraError(
-        'The camera could not be opened. It may be in use by another application.',
+        'The camera is busy. Close other apps that use it (video calls, browser tabs), then try again.',
         name
       )
     default:
       return new CameraError(
-        `Camera error: ${err instanceof Error ? err.message : String(err)}`,
+        `Camera problem: ${err instanceof Error ? err.message : String(err)}`,
         name || 'Unknown'
       )
   }
@@ -98,7 +121,7 @@ export class CameraService {
     track.addEventListener('ended', () => {
       // Fired when the device is unplugged or the driver drops it.
       this.close()
-      this.opts.onDisconnected('The camera was disconnected.')
+      this.opts.onDisconnected('Camera unplugged. Plug it back in to keep playing.')
     })
 
     this.video.srcObject = stream
@@ -116,6 +139,7 @@ export class CameraService {
     const track = this.stream?.getVideoTracks()[0]
     const s = track?.getSettings() ?? {}
     return {
+      deviceId: s.deviceId ?? '',
       label: track?.label ?? '',
       width: this.video.videoWidth || s.width || 0,
       height: this.video.videoHeight || s.height || 0,

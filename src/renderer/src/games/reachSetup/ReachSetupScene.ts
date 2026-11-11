@@ -1,9 +1,19 @@
 import Phaser from 'phaser'
 import type { HandRelative } from '../../input/cursor'
-import { fitReach, MIN_SAMPLES } from '../../input/reach'
+import { fitReach } from '../../input/reach'
 import type { Side, Vec2 } from '../../input/types'
 import type { SetupServices } from '../types'
-import { CursorLayer, DwellButtons, FONT, HAND_COLORS, hex, type CursorDraw } from '../ui'
+import {
+  CursorLayer,
+  DwellButtons,
+  fillScreen,
+  FONT,
+  HAND_COLORS,
+  hex,
+  THEME,
+  themeBackdrop,
+  type CursorDraw
+} from '../ui'
 
 const W = 1280
 const H = 720
@@ -40,9 +50,8 @@ export class ReachSetupScene extends Phaser.Scene {
   }
 
   create(): void {
-    const bg = this.add.graphics()
-    bg.fillGradientStyle(0x10213f, 0x10213f, 0x1d4e89, 0x1d4e89, 1, 1, 1, 1)
-    bg.fillRect(0, 0, W, H)
+    fillScreen(this)
+    themeBackdrop(this)
     this.gfx = this.add.graphics().setDepth(5)
     this.title = this.add
       .text(W / 2, 50, '', {
@@ -52,12 +61,12 @@ export class ReachSetupScene extends Phaser.Scene {
         color: '#ffffff'
       })
       .setOrigin(0.5)
-      .setStroke('#0b1d33', 8)
+      .setStroke(THEME.ink, 8)
     this.detail = this.add
       .text(W / 2, 108, '', {
         fontFamily: FONT,
         fontSize: '26px',
-        color: '#cfe8ff',
+        color: THEME.textDim,
         align: 'center'
       })
       .setOrigin(0.5, 0)
@@ -71,7 +80,7 @@ export class ReachSetupScene extends Phaser.Scene {
           color: p.color
         })
         .setOrigin(0.5)
-        .setStroke('#0b1d33', 5)
+        .setStroke(THEME.ink, 5)
     )
     this.buttons = new DwellButtons(this, { dwellMs: 1000 })
     this.cursors = new CursorLayer(this, 30)
@@ -113,13 +122,13 @@ export class ReachSetupScene extends Phaser.Scene {
       const hand = cur.side === 'right' ? 'RIGHT' : 'LEFT'
       this.title.setText(
         cur.kind === 'intro'
-          ? `Get ready: ${hand} hand`
-          : `Trace big circles with your ${hand} hand`
+          ? `Get ready  ·  ${hand} hand`
+          : `Draw big circles with your ${hand} hand`
       )
       this.detail.setText(
         cur.kind === 'intro'
-          ? 'Stand at your play spot. Draw large, slow circles - as far as is comfortable,\nup high, out to the side, across your body and down to your waist.'
-          : 'Keep going - bigger circles, but stay comfortable.'
+          ? 'Big, slow circles: up high, out wide, across your body, down to your waist.'
+          : 'Keep going  ·  as big as feels comfortable'
       )
     }
     this.draw(
@@ -140,7 +149,8 @@ export class ReachSetupScene extends Phaser.Scene {
         const pos = c[side]
         draws.push({
           pos: pos && { x: pos.x * W, y: pos.y * H },
-          color: players.length > 1 ? hex(p.color) : HAND_COLORS[side]
+          color: players.length > 1 ? hex(p.color) : HAND_COLORS[side],
+          fist: pos?.fist
         })
       }
     })
@@ -183,7 +193,7 @@ export class ReachSetupScene extends Phaser.Scene {
         // Time bar.
         g.fillStyle(0xffffff, 0.15)
         g.fillRect(cx - 200, H - 40, 400, 8)
-        g.fillStyle(step.kind === 'intro' ? 0x36d1ff : 0xffb02e, 1)
+        g.fillStyle(step.kind === 'intro' ? THEME.greenBright : 0xffb02e, 1)
         g.fillRect(cx - 200, H - 40, 400 * Math.min(1, progress), 8)
       }
     })
@@ -191,27 +201,21 @@ export class ReachSetupScene extends Phaser.Scene {
 
   private async finish(): Promise<void> {
     const players = this.services.players()
-    this.title.setText('Reach setup')
-    this.detail.setText('Working out your reach...')
+    this.title.setText('All set')
+    this.detail.setText('Fitting…')
     const lines: string[] = []
     for (const [i, p] of players.entries()) {
       const zone = fitReach(this.samples[i])
       if (!zone) {
-        lines.push(
-          `${p.name}: not enough movement seen (${this.samples[i].length}/${MIN_SAMPLES * 2}) - try again`
-        )
+        lines.push(`${p.name}: didn't see enough movement  ·  try again`)
         continue
       }
       const ok = await this.services.saveReach(i, zone)
-      lines.push(
-        ok
-          ? `${p.name}: saved - reach ${(zone.inward + zone.outward).toFixed(1)} x ${(zone.up + zone.down).toFixed(1)} shoulder widths`
-          : `${p.name}: could not save`
-      )
+      lines.push(ok ? `${p.name}: saved` : `${p.name}: couldn't save  ·  try again`)
     }
     console.info(`[reach] ${lines.join(' | ')}`)
     this.detail.setText(
-      lines.join('\n') + '\n\nYour cursor now uses your reach. Try it on the buttons below.'
+      lines.join('\n') + '\n\nThe cursor now fits your reach. Try it on the buttons.'
     )
     this.buttons.set([
       { id: 'again', label: 'Try again', x: 0.24, y: 0.78, w: 0.22, h: 0.12 },

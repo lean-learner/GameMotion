@@ -10,7 +10,16 @@ import {
   isAutostartEnabled,
   setAutostart
 } from '../src/main/autostart'
-import { addScore, cleanName, cleanReach, defaultData, sanitize, Store } from '../src/main/store'
+import {
+  addScore,
+  cleanCamera,
+  cleanName,
+  cleanReach,
+  defaultData,
+  sanitize,
+  Store
+} from '../src/main/store'
+import { pickCamera } from '../src/renderer/src/camera/CameraService'
 
 const day = '2026-11-10T00:00:00.000Z'
 
@@ -71,7 +80,42 @@ describe('data file', () => {
     expect(d.slots).toHaveLength(4)
     expect(d.scores['balloon-pop']).toEqual([{ slot: 1, score: 5, date: day }])
     expect(d.scores['../x']).toBeUndefined()
-    expect(d.settings.startFullscreen).toBe(false)
+    expect(d.settings.startFullscreen).toBe(true)
+  })
+
+  it('opens in full screen by default, and keeps a later choice to turn it off', () => {
+    expect(defaultData().settings.startFullscreen).toBe(true)
+    // A file from before full screen became the default is switched over once.
+    expect(sanitize({ version: 1, settings: { startFullscreen: false } }).settings).toMatchObject({
+      startFullscreen: true
+    })
+    expect(sanitize({ version: 2, settings: { startFullscreen: false } }).settings).toMatchObject({
+      startFullscreen: false
+    })
+  })
+
+  it('keeps a valid camera choice and drops a broken one', () => {
+    const cam = { deviceId: 'abc', label: 'C270 HD WEBCAM' }
+    expect(sanitize({ settings: { camera: cam } }).settings.camera).toEqual(cam)
+    expect(sanitize({ settings: { camera: { deviceId: 5 } } }).settings.camera).toBeNull()
+    expect(sanitize({ settings: {} }).settings.camera).toBeNull()
+    expect(cleanCamera({ deviceId: '', label: '' })).toBeNull()
+    expect(cleanCamera({ deviceId: 'x'.repeat(201), label: 'a' })).toBeNull()
+  })
+
+  it('picks the current camera, then the remembered one, then the first', () => {
+    const cams = [
+      { deviceId: 'a', label: 'Laptop camera' },
+      { deviceId: 'b', label: 'C270 HD WEBCAM' }
+    ]
+    expect(pickCamera(cams, 'a', { deviceId: 'b', label: 'C270 HD WEBCAM' })).toBe('a')
+    expect(pickCamera(cams, '', { deviceId: 'b', label: 'x' })).toBe('b')
+    // The id changed (e.g. another USB port): fall back to the name.
+    expect(pickCamera(cams, '', { deviceId: 'old', label: 'C270 HD WEBCAM' })).toBe('b')
+    // The remembered camera is unplugged: use the first one.
+    expect(pickCamera(cams, 'gone', { deviceId: 'old', label: 'Other' })).toBe('a')
+    expect(pickCamera(cams, '', null)).toBe('a')
+    expect(pickCamera([], '', null)).toBe('')
   })
 
   it('keeps valid reach zones and drops broken ones', () => {

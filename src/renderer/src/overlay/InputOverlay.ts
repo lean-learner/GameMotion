@@ -76,7 +76,7 @@ export class InputOverlay {
         ctx.fill()
         this.text(
           snap.calibration.status === 'waiting'
-            ? 'Step into view - shoulders visible'
+            ? 'Step into view'
             : 'Stand straight and hold still',
           cx,
           cy - 6 * u,
