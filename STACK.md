@@ -2,7 +2,8 @@
 
 This page explains what GameMotion is made of, layer by layer: what each piece does,
 why we picked it, and what it depends on. You don't need to know any of these tools
-beforehand. For how to run and build the app, see the [README](README.md).
+beforehand. To get it running, see the [README](README.md); for the full technical record, see
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## The idea in one paragraph
 
