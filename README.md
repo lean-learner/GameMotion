@@ -510,3 +510,10 @@ All five planned milestones are built, plus the extras above. Still needed with 
 players: chop feel and speed (`MIN_POP_SPEED`, `MIN_CHOP_SPEED`), Fruit Chop
 and Meteor Dodge difficulty, Versus framing with
 two people on the C270, and Full vs Heavy pose models.
+
+## License
+
+GameMotion is released under the [MIT License](LICENSE).
+
+It bundles third-party software under their own licenses: Electron and Phaser (MIT), and
+MediaPipe Tasks Vision with its pose and hand models (Apache 2.0).

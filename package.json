@@ -5,6 +5,7 @@
   "description": "Local, offline motion games played with your body and a webcam",
   "main": "./out/main/index.js",
   "author": "GameMotion contributors",
+  "license": "MIT",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
