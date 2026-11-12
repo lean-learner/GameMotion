@@ -1,4 +1,5 @@
 import type Phaser from 'phaser'
+import { drawFigure } from '../poseArt'
 import type { Button } from '../ui'
 
 type Art = NonNullable<Button['art']>
@@ -78,6 +79,92 @@ const ART: Record<string, Art> = {
     g.fillStyle(0x4da3ff, 1)
     g.fillCircle(x + w * 0.46, y + h * 0.56, 11 * s)
     g.fillRect(x + w * 0.46 - 9 * s, y + h * 0.56 + 11 * s, 18 * s, 22 * s)
+  },
+  'human-bridge': (g, x, y, w, h) => {
+    gradient(g, x, y, w, h, 0x5b2a86, 0xff8a3d)
+    const s = Math.min(w, h) / 240
+    const sw = 26 * s
+    const cy = y + h * 0.36
+    // Two people joining hands in the middle.
+    const reach = (w * 0.2) / sw
+    drawFigure(
+      g,
+      x + w * 0.3,
+      cy,
+      sw,
+      'left-up',
+      { color: 0xffffff },
+      {
+        left: { x: -0.75, y: 1.25 },
+        right: { x: reach, y: -0.3 }
+      }
+    )
+    drawFigure(
+      g,
+      x + w * 0.7,
+      cy,
+      sw,
+      'right-up',
+      { color: 0xffffff },
+      {
+        left: { x: -reach, y: -0.3 },
+        right: { x: 0.75, y: 1.25 }
+      }
+    )
+    g.fillStyle(0xffe14d, 1)
+    g.fillCircle(x + w * 0.5, cy - 0.3 * sw, 9 * s)
+    g.fillStyle(0xffe14d, 0.3)
+    g.fillCircle(x + w * 0.5, cy - 0.3 * sw, 18 * s)
+  },
+  'mirror-duel': (g, x, y, w, h) => {
+    gradient(g, x, y, w, h, 0x12b3a8, 0x0b2545)
+    const s = Math.min(w, h) / 240
+    const sw = 26 * s
+    // The same pose on both sides of the mirror.
+    drawFigure(g, x + w * 0.28, y + h * 0.4, sw, 'disco-right', { color: 0xffffff })
+    drawFigure(g, x + w * 0.72, y + h * 0.4, sw, 'disco-left', { color: 0xfff3b0 })
+    g.lineStyle(3 * s, 0xffffff, 0.7)
+    g.lineBetween(x + w * 0.5, y + h * 0.06, x + w * 0.5, y + h * 0.72)
+  },
+  'freeze-dance': (g, x, y, w, h) => {
+    gradient(g, x, y, w, h, 0x2a0a4a, 0xd6336c)
+    const s = Math.min(w, h) / 240
+    drawFigure(g, x + w * 0.36, y + h * 0.4, 26 * s, 'disco-left', { color: 0xffffff })
+    // The light: green to dance, red to freeze.
+    const lx = x + w * 0.74
+    g.fillStyle(0x000000, 0.55)
+    g.fillRoundedRect(lx - 26 * s, y + h * 0.12, 52 * s, 104 * s, 26 * s)
+    g.fillStyle(0x3ddc84, 1)
+    g.fillCircle(lx, y + h * 0.12 + 28 * s, 18 * s)
+    g.fillStyle(0xff4d4d, 1)
+    g.fillCircle(lx, y + h * 0.12 + 76 * s, 18 * s)
+  },
+  'punch-fly': (g, x, y, w, h) => {
+    gradient(g, x, y, w, h, 0x1b4332, 0x74c69d)
+    const s = Math.min(w, h) / 240
+    const fly = (fx: number, fy: number, r: number): void => {
+      const cx = x + w * fx
+      const cy = y + h * fy
+      g.fillStyle(0xffffff, 0.65)
+      g.fillEllipse(cx - r * s * 0.9, cy - r * s * 0.8, r * s * 1.6, r * s)
+      g.fillEllipse(cx + r * s * 0.9, cy - r * s * 0.8, r * s * 1.6, r * s)
+      g.fillStyle(0x1f2a1f, 1)
+      g.fillCircle(cx, cy, r * s)
+      g.fillStyle(0xd62828, 1)
+      g.fillCircle(cx - r * s * 0.4, cy - r * s * 0.2, r * s * 0.28)
+      g.fillCircle(cx + r * s * 0.4, cy - r * s * 0.2, r * s * 0.28)
+    }
+    fly(0.24, 0.26, 13)
+    fly(0.52, 0.5, 16)
+    // A glove swinging in from the right.
+    g.lineStyle(4 * s, 0xffffff, 0.7)
+    g.lineBetween(x + w * 0.9, y + h * 0.22, x + w * 0.97, y + h * 0.18)
+    g.lineBetween(x + w * 0.91, y + h * 0.34, x + w * 0.98, y + h * 0.34)
+    g.fillStyle(0xe63946, 1)
+    g.fillCircle(x + w * 0.78, y + h * 0.28, 26 * s)
+    g.fillCircle(x + w * 0.7, y + h * 0.36, 11 * s)
+    g.fillStyle(0xffffff, 0.3)
+    g.fillCircle(x + w * 0.75, y + h * 0.22, 8 * s)
   }
 }
 

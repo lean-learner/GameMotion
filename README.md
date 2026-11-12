@@ -3,7 +3,7 @@
 **Motion games you play with your whole body, using nothing but a webcam.**
 
 Stand in front of your computer, see yourself on screen, and chop flying fruit with
-your hands, pop balloons, or dodge falling meteors. No controller, no headset, no
+your hands, dodge falling meteors, strike a pose, or dance until the light turns red. No controller, no headset, no
 account. If you have a webcam, you have everything you need.
 
 It is free, open source, and runs entirely on your own computer. Your camera picture
@@ -11,15 +11,20 @@ never leaves it, and the games work with the internet switched off.
 
 ## The games
 
-| Game                | How you play                                                                 |
-| ------------------- | ---------------------------------------------------------------------------- |
-| 🍉 **Fruit Chop**   | Fruit flies up around you. Swing your hands to chop it. Don't hit the bombs. |
-| 🎈 **Balloon Pop**  | Balloons drift up. Swipe through them before they get away.                  |
-| ☄️ **Meteor Dodge** | You are the target. Step aside from meteors and duck under the lasers.       |
+| Game                | How you play                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| 🍉 **Fruit Chop**   | Fruit flies up around you. Swing your hands to chop it. Don't hit the bombs.           |
+| 🎈 **Balloon Pop**  | Balloons drift up. Swipe through them before they get away.                            |
+| ☄️ **Meteor Dodge** | You are the target. Step aside from meteors and duck under the lasers.                 |
+| 🌉 **Human Bridge** | A wall is coming. Strike the pose to fit through. Two players join hands for a bridge. |
+| 🪞 **Mirror Duel**  | A pose appears on a card. First to copy it scores.                                     |
+| 🕺 **Freeze Dance** | Green light: dance as hard as you can. Red light: freeze, or lose a life.              |
+| 🥊 **Punch Fly**    | Flies buzz in on the beat. Punch each one as it arrives.                               |
 
 Every game is played **over your own camera picture**, so you see yourself in the
 middle of the action. One or two people can play, and the app keeps top scores for up
-to four players.
+to four players. The last four are at their best with two: Human Bridge is a team game,
+the others are a race against each other.
 
 ## Play right now, in your browser
 

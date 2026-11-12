@@ -104,6 +104,34 @@ export class Sfx {
     ;[523, 659, 784, 1047].forEach((f, i) => this.tone(f, i * 0.11, 0.16, 'triangle'))
   }
 
+  /** One drum hit for a dance beat: a deep thump, heavier when accented. */
+  drum(accent = false): void {
+    const a = this.audio()
+    if (!a) return
+    const { ctx, out } = a
+    const t0 = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const g = ctx.createGain()
+    osc.frequency.setValueAtTime(accent ? 170 : 130, t0)
+    osc.frequency.exponentialRampToValueAtTime(45, t0 + 0.12)
+    g.gain.setValueAtTime(accent ? 0.9 : 0.6, t0)
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.2)
+    osc.connect(g).connect(out)
+    osc.start(t0)
+    osc.stop(t0 + 0.22)
+  }
+
+  /** A single short note, for simple tunes (frequency in Hz). */
+  note(freq: number, seconds = 0.14): void {
+    this.tone(freq, 0, seconds, 'triangle', 0.3)
+  }
+
+  /** A low buzz: caught out, or a miss. */
+  buzz(): void {
+    this.tone(110, 0, 0.3, 'sawtooth', 0.25)
+    this.tone(104, 0, 0.3, 'sawtooth', 0.25)
+  }
+
   close(): void {
     void this.ctx?.close()
     this.ctx = null

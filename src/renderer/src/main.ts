@@ -10,8 +10,12 @@ import type { HandCursor, InputEvent, MotionSnapshot, Vec2 } from './input/types
 import { describe, InputOverlay } from './overlay/InputOverlay'
 import { GuidedTest } from './testrun/GuidedTest'
 import { balloonPop } from './games/balloonPop'
+import { freezeDance } from './games/freezeDance'
 import { fruitChop } from './games/fruitChop'
+import { humanBridge } from './games/humanBridge'
 import { meteorDodge } from './games/meteorDodge'
+import { mirrorDuel } from './games/mirrorDuel'
+import { punchFly } from './games/punchFly'
 import { mountLauncher } from './games/launcher'
 import { mountReachSetup } from './games/reachSetup'
 import { validReach } from './input/reach'
@@ -102,7 +106,15 @@ const eventLog: { event: InputEvent; at: number }[] = []
 let rafHandle: number | null = null
 
 // ---- Shell: launcher, games, settings (Milestones 3-4) ---------------------------
-const GAMES: GameModule[] = [fruitChop, balloonPop, meteorDodge]
+const GAMES: GameModule[] = [
+  fruitChop,
+  balloonPop,
+  meteorDodge,
+  humanBridge,
+  mirrorDuel,
+  freezeDance,
+  punchFly
+]
 /** Running in a browser (the web version) rather than the desktop app. */
 const IS_WEB = window.gameMotion.platform === 'web'
 type Mode = 'settings' | 'launcher' | 'game'
@@ -189,7 +201,11 @@ const gameServices: GameServices = {
       }
     },
     body: (player = 0) => {
-      if (DEMO_INPUT) return { x: 0.5, y: 0.4, shoulderWidth: 0.15 }
+      if (DEMO_INPUT) {
+        // Two scripted players stand side by side.
+        const x = sessionPlayers().length > 1 ? [0.3, 0.7][player] : 0.5
+        return { x, y: 0.4, shoulderWidth: 0.13 }
+      }
       const pos = snapshots[player]?.position
       if (!pos || pos.x === null || pos.y === null || pos.size === null) return null
       const c = toFrame({ x: pos.x, y: pos.y })!

@@ -38,7 +38,7 @@ npm run uninstall:desktop
 ```
 
 **GitHub Actions** (`.github/workflows/build.yml`) tests and packages natively on
-Windows, macOS and Linux for every push. Pushing a tag such as `v0.3.0` publishes a
+Windows, macOS and Linux for every push. Pushing a tag such as `v0.4.0` publishes a
 GitHub release with every build, checksums and INSTALL.md. Builds aren't code-signed
 yet, so first launches show the usual Windows SmartScreen / macOS Gatekeeper warning;
 INSTALL.md explains how to proceed.
@@ -507,3 +507,37 @@ GameMotion is released under the [MIT License](../LICENSE).
 
 It bundles third-party software under their own licenses: Electron and Phaser (MIT), and
 MediaPipe Tasks Vision with its pose and hand models (Apache 2.0).
+
+## The pose and rhythm games (Human Bridge, Mirror Duel, Freeze Dance, Punch Fly)
+
+These four share more code than the first three games:
+
+- `games/roundFlow.ts`: the menu, countdown, playing, paused, game-over flow and the play
+  clock. Each game's rules own a `RoundFlow`.
+- `games/CameraGameScene.ts`: a base scene with everything the screens have in common
+  (stage, menus, score plates, saving scores, pausing when a player leaves the view). A
+  game fills in `build`, `begin`, `step`, `draw`, `scores` and `hudLine`.
+- `games/poses.ts` and `games/poseArt.ts`: telling poses apart from the hands relative to
+  the shoulders (in shoulder widths), and drawing them as stick figures.
+- `games/motion.ts`: `MotionMeter`, how fast a player is moving, measured over a short
+  window so tracking shake doesn't count as movement.
+
+The rules, each in its own `logic.ts` with unit tests:
+
+- **Human Bridge** (team): a wall arrives with a pose per player; everyone must be in
+  their pose when it lands (a pose struck up to 350 ms earlier still counts). Walls get
+  8% quicker each time. From the 3rd wall they come two layers deep, and from the 7th
+  three: a new pose straight after the last, with 1.1 to 1.7 seconds to change. With two
+  players about 3 layers in 10 ask for a bridge: inner hands joined. Three crashes end it.
+- **Mirror Duel**: 12 poses, each with less time; holding the pose for 250 ms takes the
+  points, plus a bonus for speed. With two players only the first to strike it scores.
+- **Freeze Dance**: 75 seconds. Green pays up to 40 points a second for movement; on red,
+  after a 1.2 second grace time (the camera sees a movement slightly late), moving faster than 0.55 shoulder widths a second costs a life.
+  Holding still through a red light pays 50.
+- **Punch Fly**: 60 seconds, 84 rising to 126 beats a minute. A hand must arrive on the
+  fly's spot (not wait there) within the hit window; within 110 ms of the beat is perfect.
+  With two players, inward flies go overhead so nobody punches into the other, and both
+  landing the same beat pays a bonus.
+
+The speed and timing numbers above were chosen by reasoning, not yet tuned with real
+players in front of a camera.

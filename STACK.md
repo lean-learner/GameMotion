@@ -128,6 +128,9 @@ the box, it is well documented, and it runs anywhere a browser does.
 - **Rules are separate from drawing.** Each game has a `logic.ts` (scoring, timing,
   collisions; no Phaser at all) and a `...Scene.ts` (drawing only). The logic files are
   what the tests exercise.
+- **Shared screens live in one place.** The newer games extend
+  `games/CameraGameScene.ts`, which already has the menu, countdown, pause, score plates
+  and score saving. A new game only writes its rules and what it draws.
 - **Games load only when started.** Each game's `index.ts` uses a dynamic `import()`,
   so the launcher opens quickly.
 - **Games get a small toolbox, not the whole app.** A game receives a `GameServices`

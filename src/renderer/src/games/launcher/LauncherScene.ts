@@ -244,19 +244,23 @@ export class LauncherScene extends Phaser.Scene {
     const column = (i: number): number => LEFT + i * (TILE_W + GAP)
 
     // Games: big picture tiles.
+    // As many rows as the games need, sharing the height one row used to have.
     const gamesY = 0.18
     const gamesH = two ? 0.24 : 0.33
-    this.label(two ? 'Games · Versus' : 'Games', gamesY - 0.035)
+    const gameRows = Math.max(1, Math.ceil(this.services.games.length / PER_ROW))
+    const rowGap = GAP * (W / H)
+    const tileH = (gamesH - (gameRows - 1) * rowGap) / gameRows
+    this.label(two ? 'Games · 2 players' : 'Games', gamesY - 0.035)
     const games: Button[] = this.services.games.map((g, i) => {
       const best = this.services.topScores(tableFor(g.id, count))[0]
       return {
         id: `game-${g.id}`,
         label: g.title,
         sub: best ? `Best ${best.score} · ${best.name}` : 'No score yet',
-        x: column(i),
-        y: gamesY,
+        x: column(i % PER_ROW),
+        y: gamesY + Math.floor(i / PER_ROW) * (tileH + rowGap),
         w: TILE_W,
-        h: gamesH,
+        h: tileH,
         art: tileArt(g.id)
       }
     })
