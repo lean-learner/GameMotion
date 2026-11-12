@@ -1,3 +1,6 @@
+// Must come first: in a browser it provides window.gameMotion, which Electron's preload
+// provides in the desktop app.
+import './platform/web'
 import { DisplayBrightener } from './camera/brightness'
 import { DwellSelector, type DwellState } from './input/dwell'
 import { DUO_LANES, SOLO_LANE } from './input/position'
@@ -46,6 +49,8 @@ const ui = {
   startFullscreen: $<HTMLInputElement>('start-fullscreen'),
   autostart: $<HTMLInputElement>('autostart'),
   addShortcuts: $<HTMLButtonElement>('add-shortcuts'),
+  welcome: $<HTMLElement>('welcome'),
+  welcomePlay: $<HTMLButtonElement>('welcome-play'),
   toggle: $<HTMLButtonElement>('toggle'),
   cameraSelect: $<HTMLSelectElement>('camera-select'),
   poseModel: $<HTMLSelectElement>('pose-model'),
@@ -98,6 +103,8 @@ let rafHandle: number | null = null
 
 // ---- Shell: launcher, games, settings (Milestones 3-4) ---------------------------
 const GAMES: GameModule[] = [fruitChop, balloonPop, meteorDodge]
+/** Running in a browser (the web version) rather than the desktop app. */
+const IS_WEB = window.gameMotion.platform === 'web'
 type Mode = 'settings' | 'launcher' | 'game'
 let mode: Mode = 'settings'
 let unmount: (() => void) | null = null
@@ -267,7 +274,7 @@ const launcherServices: LauncherServices = {
   openSettings: () => enterSettings(),
   openReachSetup: () =>
     void mountFullscreen('game', () => mountReachSetup(ui.gameRoot, setupServices), 'reach setup'),
-  quit: () => void window.gameMotion.quit()
+  quit: () => (IS_WEB ? showWelcome() : void window.gameMotion.quit())
 }
 
 /**
@@ -343,6 +350,28 @@ async function enterGame(game: GameModule, options: { autostart?: boolean } = {}
   )
   // Games played over the camera view: the picture fills the game frame behind the canvas.
   if (opened && game.cameraView) document.body.classList.add('camera-play')
+}
+
+// ---- Web version: welcome screen ---------------------------------------------------
+// A browser only allows sound and full screen after a click, so the web version opens
+// on a Play button. "Exit" in the launcher comes back here and releases the camera.
+
+function showWelcome(): void {
+  enterSettings()
+  stopTracking()
+  if (document.fullscreenElement) void document.exitFullscreen()
+  ui.welcome.hidden = false
+  ui.welcomePlay.focus()
+}
+
+async function playFromWelcome(): Promise<void> {
+  ui.welcome.hidden = true
+  storeView = await window.gameMotion.store.get().catch(() => storeView)
+  if (storeView?.settings.startFullscreen && !document.fullscreenElement) {
+    // Refused in some embedded pages; the game still works in the window.
+    await document.documentElement.requestFullscreen().catch(() => undefined)
+  }
+  await enterLauncher()
 }
 
 /** The desktop view: camera, diagnostics, test tools and settings. */
@@ -747,6 +776,7 @@ function renderControls(): void {
 }
 
 ui.play.addEventListener('click', () => void enterLauncher())
+ui.welcomePlay.addEventListener('click', () => void playFromWelcome())
 // Esc goes back to the launcher (from a game or from settings); in the launcher it
 // leaves full screen. The settings view is opened only from the launcher's Settings tile.
 window.addEventListener('keydown', (e) => {
@@ -907,9 +937,15 @@ function logMetrics(): void {
 if (window.gameMotion.platform !== 'linux') {
   ui.holdFps.checked = false
   ui.holdFps.disabled = true
-  ui.holdFps.parentElement!.title = 'Only available on Linux.'
+  ui.holdFps.parentElement!.title = IS_WEB
+    ? 'Only available in the Linux desktop app.'
+    : 'Only available on Linux.'
 }
-ui.d.versions.textContent = `Electron ${window.gameMotion.versions.electron} · Chromium ${window.gameMotion.versions.chrome}`
+// Starting with the computer is a desktop-app feature.
+if (IS_WEB) ui.autostart.parentElement!.hidden = true
+ui.d.versions.textContent = IS_WEB
+  ? 'Web version'
+  : `Electron ${window.gameMotion.versions.electron} · Chromium ${window.gameMotion.versions.chrome}`
 setInterval(renderDiagnostics, 250)
 setInterval(logMetrics, 5000)
 window.addEventListener('beforeunload', () => {
@@ -953,6 +989,8 @@ if (params.has('autostart') && selfTestGame) {
       setTimeout(() => void startTracking(), 2000)
     }, 8000)
   })
+} else if (IS_WEB) {
+  showWelcome()
 } else {
   // Normal start: straight into the gesture launcher (tracking starts automatically).
   void enterLauncher()

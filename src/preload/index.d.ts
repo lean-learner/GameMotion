@@ -44,7 +44,7 @@ declare global {
   interface Window {
     gameMotion: {
       versions: { electron: string; chrome: string }
-      /** 'win32' | 'darwin' | 'linux' | ... */
+      /** 'win32' | 'darwin' | 'linux' | ..., or 'web' when running in a browser. */
       platform: string
       store: {
         get(): Promise<StoreView>

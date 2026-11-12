@@ -190,12 +190,24 @@ These follow Electron's official
   developer tools.
 - **Only one copy runs at a time**, because a webcam can only be opened by one program.
 
+### The web version
+
+The renderer is an ordinary web page, so it can also be served as a website with no
+Electron at all. `npm run build:web` builds it into `out/web`, and GitHub Pages hosts it
+for free. In a browser there is no preload bridge, so `src/renderer/src/platform/web.ts`
+provides the same `window.gameMotion` list of requests using browser features: saved
+data goes to the browser's storage, and desktop-only extras (start on login, the Linux
+camera fix) are switched off. The rules for cleaning saved data live in
+`src/shared/storeData.ts` and are shared by both versions. The web version opens on a
+Play button because browsers only allow sound and full screen after a click.
+
 ## 6. Saved data
 
 **What it does.** Remembers player names, top scores, each player's reach, the chosen
 camera and the full-screen setting.
 
-**What we use.** One JSON text file in your user folder, written by `src/main/store.ts`.
+**What we use.** One JSON text file in your user folder, written by `src/main/store.ts`
+(the web version keeps the same data in the browser's `localStorage`).
 
 **Why not a database.** The data is tiny. A plain file needs no extra software, is easy
 to back up or delete, and you can open it in a text editor. Everything read from it is
@@ -220,8 +232,8 @@ saved data, and the safety-critical file lookup. Run them with `npm test`.
 **ESLint and Prettier** (code quality). ESLint points out likely mistakes; Prettier
 formats the code so it all looks the same. `npm run lint`, `npm run format`.
 
-**GitHub Actions** (automation). On every push it runs the checks and builds the app on
-Windows, macOS and Linux, so we know it works on all three.
+**GitHub Actions** (automation). On every push it runs the checks, builds the app on
+Windows, macOS and Linux, and publishes the web version to GitHub Pages.
 
 ## What we depend on
 

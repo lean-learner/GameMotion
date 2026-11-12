@@ -93,7 +93,8 @@ export class TrackingService {
       this.readyWaiter = { resolve, reject }
     })
     // Assets are served from the app's own origin (public/ directory).
-    const assetBase = new URL('/mediapipe', location.href).href
+    // Relative to the page, so it also works when the app is served from a sub-folder.
+    const assetBase = new URL('./mediapipe', document.baseURI).href
     this.send({ type: 'init', config, assetBase })
     await ready
   }

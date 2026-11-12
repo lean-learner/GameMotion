@@ -1,0 +1,48 @@
+# Publishes the web version to GitHub Pages on every push to main.
+# The site is the same page the desktop app shows, built as static files.
+name: Web version
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment at a time; a newer push replaces a waiting one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Download tracking models (served with the site)
+        run: npm run setup:models
+      - run: npm test
+      - name: Build the web version
+        run: npm run build:web
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write # to publish the site
+      id-token: write # to prove the deployment comes from this workflow
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

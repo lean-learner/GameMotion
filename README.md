@@ -21,7 +21,20 @@ Every game is played **over your own camera picture**, so you see yourself in th
 middle of the action. One or two people can play, and the app keeps top scores for up
 to four players.
 
-## Get started in 3 steps
+## Play right now, in your browser
+
+**▶ [lean-learner.github.io/GameMotion](https://lean-learner.github.io/GameMotion/)**
+
+Nothing to install. Open the link in Chrome or Edge on a computer with a webcam, click
+**Play**, and allow the camera. Then stand 2 to 3 metres back and raise a hand.
+
+It is the same game as the desktop app, and just as private: the page is loaded once,
+then everything runs inside your browser. Your camera picture is never uploaded.
+
+## Or install the desktop app
+
+The desktop app works with no internet at all and opens straight into full screen,
+which is nice for a TV or a party.
 
 ### 1. Download
 
@@ -92,7 +105,8 @@ happened. It genuinely helps.
 ```
 
 - **[Electron](https://www.electronjs.org)** turns it into a desktop app that runs on
-  Windows, Mac and Linux. It's the same technology behind VS Code and Discord.
+  Windows, Mac and Linux. It's the same technology behind VS Code and Discord. The web
+  version is the very same page, served by GitHub Pages instead.
 - **[MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/guide)** is the clever
   part that spots your body and hands in the camera picture. It runs on your computer,
   not in the cloud.
@@ -107,9 +121,10 @@ experience needed.
 
 - The camera picture is used on your computer and thrown away. It is never recorded,
   saved or sent anywhere.
-- The app blocks all internet traffic. It doesn't even check for updates.
-- The only things saved are player names, scores and settings, in one small file on
-  your computer.
+- The desktop app blocks all internet traffic. It doesn't even check for updates. The
+  web version downloads the game once and then talks to no one.
+- The only things saved are player names, scores and settings: in one small file on
+  your computer (desktop app) or in your browser's own storage (web version).
 
 ## Want to tinker with the code?
 
@@ -126,8 +141,10 @@ npm start              # builds and opens the app
 Other useful commands:
 
 ```bash
-npm run dev    # run with instant reload while you edit
-npm test       # run the automated tests
+npm run dev         # run with instant reload while you edit
+npm test            # run the automated tests
+npm run build:web   # build the web version into out/web
+npm run preview:web # ...and try it at the address it prints
 ```
 
 Each game lives in its own folder under `src/renderer/src/games/`. Copying one is the
