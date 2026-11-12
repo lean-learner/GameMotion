@@ -1,8 +1,9 @@
 import { DisplayBrightener } from './camera/brightness'
 import { DwellSelector, type DwellState } from './input/dwell'
+import { DUO_LANES, SOLO_LANE } from './input/position'
 import { MotionInput } from './input/MotionInput'
 import { PlayerTracker } from './input/players'
-import type { HandCursor, InputEvent, MotionSnapshot } from './input/types'
+import type { HandCursor, InputEvent, MotionSnapshot, Vec2 } from './input/types'
 import { describe, InputOverlay } from './overlay/InputOverlay'
 import { GuidedTest } from './testrun/GuidedTest'
 import { balloonPop } from './games/balloonPop'
@@ -147,6 +148,22 @@ function demoCursors(
   }
 }
 
+/**
+ * The camera picture covers the 16:9 game frame (CSS object-fit: cover), so a
+ * picture of another shape is cropped. These map picture coordinates (0..1)
+ * to game-frame coordinates (0..1).
+ */
+const FRAME_ASPECT = 16 / 9
+function frameScale(): Vec2 {
+  const a = motion.aspect
+  return a < FRAME_ASPECT ? { x: 1, y: FRAME_ASPECT / a } : { x: a / FRAME_ASPECT, y: 1 }
+}
+function toFrame(p: Vec2 | null): Vec2 | null {
+  if (!p) return null
+  const s = frameScale()
+  return { x: (p.x - 0.5) * s.x + 0.5, y: (p.y - 0.5) * s.y + 0.5 }
+}
+
 const gameServices: GameServices = {
   input: {
     cursors: (now, player = 0) =>
@@ -156,6 +173,21 @@ const gameServices: GameServices = {
             left: motions[player]?.predictCursor('left', now) ?? null,
             right: motions[player]?.predictCursor('right', now) ?? null
           },
+    hands: (now, player = 0) => {
+      if (DEMO_INPUT) return demoCursors(now, player)
+      const m = motions[player]
+      return {
+        left: toFrame(m?.predictHand('left', now) ?? null),
+        right: toFrame(m?.predictHand('right', now) ?? null)
+      }
+    },
+    body: (player = 0) => {
+      if (DEMO_INPUT) return { x: 0.5, y: 0.4, shoulderWidth: 0.15 }
+      const pos = snapshots[player]?.position
+      if (!pos || pos.x === null || pos.y === null || pos.size === null) return null
+      const c = toFrame({ x: pos.x, y: pos.y })!
+      return { x: c.x, y: c.y, shoulderWidth: pos.size * frameScale().x }
+    },
     snapshot: (player = 0) => {
       const snap = snapshots[player] ?? null
       // Demo: the scripted player is always "in view", so games don't auto-pause.
@@ -263,6 +295,7 @@ function unmountCurrent(): void {
   gameListeners.clear()
   if (stop) stop()
   ui.gameRoot.replaceChildren()
+  document.body.classList.remove('camera-play')
 }
 
 /** Shows a full-window Phaser view (launcher or game). Starts tracking if needed. */
@@ -303,11 +336,13 @@ async function enterLauncher(): Promise<void> {
 }
 
 async function enterGame(game: GameModule, options: { autostart?: boolean } = {}): Promise<void> {
-  await mountFullscreen(
+  const opened = await mountFullscreen(
     'game',
     () => game.mount(ui.gameRoot, gameServices, options),
     `game ${game.id}`
   )
+  // Games played over the camera view: the picture fills the game frame behind the canvas.
+  if (opened && game.cameraView) document.body.classList.add('camera-play')
 }
 
 /** The desktop view: camera, diagnostics, test tools and settings. */
@@ -505,10 +540,11 @@ function inputLoop(now: number): void {
 }
 
 function startInput(aspect: number): void {
-  for (const m of motions) {
+  motions.forEach((m, i) => {
     m.aspect = aspect
+    m.lane = playerCount === 2 ? DUO_LANES[i] : SOLO_LANE
     m.reset()
-  }
+  })
   playerTracker = new PlayerTracker(playerCount, aspect)
   snapshot = null
   snapshots = [null, null]

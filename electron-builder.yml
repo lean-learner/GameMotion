@@ -14,7 +14,7 @@ files:
   - '!release/*'
   - '!.github/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,INSTALL.md}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,INSTALL.md,STACK.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml,.gitattributes}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
@@ -23,6 +23,17 @@ asarUnpack:
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 npmRebuild: false
 publish: null
+# Electron "fuses": switches flipped in the packaged program itself, so an
+# installed copy can't be turned into a general-purpose Node.js runtime or made
+# to load other code. They don't affect `npm start` / `npm run dev`.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false # pages are served from app://, never file://
+  enableCookieEncryption: true
+  resetAdHocDarwinSignature: true # keeps unsigned Apple-silicon builds launchable
 
 win:
   executableName: gamemotion

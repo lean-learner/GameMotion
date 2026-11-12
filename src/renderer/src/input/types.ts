@@ -3,6 +3,9 @@
  * mirrored like a mirror, so "right" is the player's own right and appears on
  * the right of the screen. Hands are named by the player's own side.
  */
+export type { PositionCheck, PositionIssue } from './position'
+import type { PositionCheck } from './position'
+
 export type Side = 'left' | 'right'
 
 export interface Vec2 {
@@ -32,13 +35,6 @@ export interface CursorState {
 export interface HandCursor extends Vec2 {
   angle?: number
   fist?: boolean
-  /**
-   * The hand's position for action games, in the same 0..1 screen space but
-   * mapped like a mirror (see playMap in cursor.ts) and NOT clamped: it can
-   * leave the screen, so a wide swing keeps its speed instead of stopping at
-   * the edge. Menus use x/y.
-   */
-  play?: Vec2
 }
 
 export type CalibrationStatus = 'waiting' | 'holding' | 'calibrated'
@@ -51,6 +47,8 @@ export type InputEvent =
 
 export interface MotionSnapshot {
   time: number
+  /** Whether the player is standing where tracking works well, and what to do if not. */
+  position: PositionCheck
   /** Shoulders visible this frame (nothing body-relative works without them). */
   tracked: boolean
   calibration: { status: CalibrationStatus; progress: number }

@@ -1,6 +1,7 @@
 {
   "name": "gamemotion",
   "version": "0.2.0",
+  "private": true,
   "description": "Local, offline motion games played with your body and a webcam",
   "main": "./out/main/index.js",
   "author": "GameMotion contributors",

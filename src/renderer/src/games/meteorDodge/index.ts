@@ -4,6 +4,7 @@ import type { GameModule } from '../types'
 export const meteorDodge: GameModule = {
   id: 'meteor-dodge',
   title: 'Meteor Dodge',
+  cameraView: true,
   async mount(parent, services, options = {}) {
     const [{ default: Phaser }, { MeteorDodgeScene }, { Sfx }] = await Promise.all([
       import('phaser'),
@@ -14,14 +15,14 @@ export const meteorDodge: GameModule = {
     const game = new Phaser.Game({
       type: Phaser.WEBGL,
       parent,
-      backgroundColor: '#050816',
+      transparent: true, // the camera picture shows through, behind the canvas
       banner: false,
       audio: { noAudio: true },
+      // Fills the window; the scene scales its 16:9 frame and decorates the rest (CameraStage).
       scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-        width: 1280,
-        height: 720
+        mode: Phaser.Scale.RESIZE,
+        width: parent.clientWidth || 1280,
+        height: parent.clientHeight || 720
       },
       scene: new MeteorDodgeScene(services, sfx, options.autostart ?? false)
     })

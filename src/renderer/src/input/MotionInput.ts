@@ -1,7 +1,14 @@
 import type { TrackingFrame } from '../tracking/types'
 import { measureBody } from './body'
 import { Calibrator, type Calibration } from './calibration'
-import { CursorTracker, DEFAULT_REACH, type HandRelative, type ReachZone } from './cursor'
+import {
+  CursorTracker,
+  DEFAULT_REACH,
+  ViewTracker,
+  type HandRelative,
+  type ReachZone
+} from './cursor'
+import { checkPosition, PositionMonitor, SOLO_LANE } from './position'
 import { PostureDetector } from './posture'
 import { SwipeDetector } from './swipe'
 import type { HandCursor, InputEvent, MotionSnapshot, Side, Vec2 } from './types'
@@ -24,9 +31,16 @@ const RAISED_LIMIT = 0.6
 export class MotionInput {
   private readonly calibrator = new Calibrator()
   private readonly posture = new PostureDetector()
+  private readonly position = new PositionMonitor()
+  /** Where this player's centre should be across the picture (see position.ts). */
+  lane: [number, number] = SOLO_LANE
   private readonly cursors: Record<Side, CursorTracker> = {
     left: new CursorTracker('left'),
     right: new CursorTracker('right')
+  }
+  private readonly views: Record<Side, ViewTracker> = {
+    left: new ViewTracker('left'),
+    right: new ViewTracker('right')
   }
   private readonly swipes: Record<Side, SwipeDetector> = {
     left: new SwipeDetector('left'),
@@ -47,6 +61,7 @@ export class MotionInput {
     const sw = ref?.shoulderWidth ?? body?.shoulderWidth ?? 0
     for (const side of ['left', 'right'] as const) {
       this.cursors[side].update(body, t)
+      this.views[side].update(body, this.aspect, t)
       const wrist = body?.wrists[side] ?? null
       const raised = !!body && !!wrist && wrist.y <= body.shoulderMid.y + RAISED_LIMIT * sw
       this.swipes[side].update(raised ? wrist : null, sw, t, events)
@@ -54,6 +69,7 @@ export class MotionInput {
 
     return {
       time: t,
+      position: this.position.update(checkPosition(body, this.aspect, this.lane), t),
       tracked: body !== null,
       calibration: { status: this.calibrator.status, progress: this.calibrator.progress },
       cursors: { left: this.cursors.left.state, right: this.cursors.right.state },
@@ -67,6 +83,14 @@ export class MotionInput {
   /** Cursor position extrapolated to `now`, for drawing at display rate. */
   predictCursor(side: Side, now: number): HandCursor | null {
     return this.cursors[side].predict(now)
+  }
+
+  /**
+   * A hand's position in the mirrored camera picture (0..1 across and down it,
+   * unclamped), extrapolated to `now`. For games played over the camera view.
+   */
+  predictHand(side: Side, now: number): Vec2 | null {
+    return this.views[side].predict(now)
   }
 
   /** Uses a player's own reach zone (from Reach setup); null restores the default. */
@@ -98,8 +122,10 @@ export class MotionInput {
   /** Clears all state, e.g. when tracking stops. */
   reset(): void {
     this.recalibrate()
+    this.position.reset()
     for (const side of ['left', 'right'] as const) {
       this.cursors[side].reset()
+      this.views[side].reset()
       this.swipes[side].reset()
     }
   }

@@ -58,31 +58,6 @@ export function zoneMap(
   return { x: (hand.x - left) / width, y: (hand.y - top) / height }
 }
 
-/**
- * Maps a hand into 0..1 screen space like a mirror, for action games: one zone
- * centred on the body and shared by both hands, reaching an arm's length
- * (zone.outward) past each shoulder. The left hand is on the left of the
- * screen, the right hand on the right, and a hand moves the same distance on
- * screen whichever way it goes. Height is as in zoneMap. Unclamped.
- *
- * (zoneMap instead gives each hand the whole screen from a small box around its
- * own shoulder: easy for reaching menu tiles, but a hand in front of its
- * shoulder isn't where you'd expect it, and left/right travel is uneven.)
- */
-export function playMap(
-  side: Side,
-  hand: Vec2,
-  body: BodyFrame,
-  zone: ReachZone = DEFAULT_REACH
-): Vec2 {
-  const sw = body.shoulderWidth
-  const half = (0.5 + zone.outward) * sw
-  return {
-    x: (hand.x - (body.shoulderMid.x - half)) / (2 * half),
-    y: zoneMap(side, hand, body, zone).y
-  }
-}
-
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v))
 
 /** One hand's cursor: zone mapping, One-Euro smoothing and short-term prediction. */
@@ -98,11 +73,6 @@ export class CursorTracker {
   private readonly fy = new OneEuroFilter(1.2, 4)
   private vel: Vec2 = { x: 0, y: 0 }
   private last: { t: number; p: Vec2 } | null = null
-  /** The same for the game mapping (playMap), which is never clamped. */
-  private readonly gx = new OneEuroFilter(1.2, 4)
-  private readonly gy = new OneEuroFilter(1.2, 4)
-  private playVel: Vec2 = { x: 0, y: 0 }
-  private playLast: Vec2 | null = null
   /** Smoothed hand direction (wrist to fingers), so the drawn blade doesn't twitch. */
   private dir: Vec2 | null = null
   /** Debounced grip: the reported value changes only after it has been seen FIST_FRAMES times in a row. */
@@ -119,10 +89,6 @@ export class CursorTracker {
     this.fy.reset()
     this.vel = { x: 0, y: 0 }
     this.last = null
-    this.gx.reset()
-    this.gy.reset()
-    this.playVel = { x: 0, y: 0 }
-    this.playLast = null
     this.dir = null
     this.fist = null
     this.fistPending = 0
@@ -144,21 +110,14 @@ export class CursorTracker {
     this.relative = relative
     this.raw = m
     const p = { x: clamp01(this.fx.filter(m.x, t)), y: clamp01(this.fy.filter(m.y, t)) }
-    const g = playMap(this.side, hand.pos, body, this.zone)
-    const q = { x: this.gx.filter(g.x, t), y: this.gy.filter(g.y, t) }
     if (this.last) {
       const dt = (t - this.last.t) / 1000
       if (dt > 0) {
         // Lightly smoothed velocity of the filtered cursor, for prediction.
         this.vel.x += 0.5 * ((p.x - this.last.p.x) / dt - this.vel.x)
         this.vel.y += 0.5 * ((p.y - this.last.p.y) / dt - this.vel.y)
-        if (this.playLast) {
-          this.playVel.x += 0.5 * ((q.x - this.playLast.x) / dt - this.playVel.x)
-          this.playVel.y += 0.5 * ((q.y - this.playLast.y) / dt - this.playVel.y)
-        }
       }
     }
-    this.playLast = q
     this.last = { t, p }
     if (hand.dir) {
       this.dir = this.dir
@@ -198,13 +157,55 @@ export class CursorTracker {
       x: clamp01(this.last.p.x + this.vel.x * ahead),
       y: clamp01(this.last.p.y + this.vel.y * ahead),
       angle: this.state.angle,
-      fist: this.state.fist,
-      play: this.playLast
-        ? {
-            x: this.playLast.x + this.playVel.x * ahead,
-            y: this.playLast.y + this.playVel.y * ahead
-          }
-        : undefined
+      fist: this.state.fist
     }
+  }
+}
+
+/**
+ * One hand's position in the camera picture itself, for games played over the
+ * camera view: where the hand is drawn is where the player sees their own
+ * hand. Mirrored like the picture, 0..1 across and down it, smoothed and
+ * predicted like a cursor, but with no reach zone, no clamping, and no hiding
+ * of a lowered hand: if the camera sees the hand, it has a position.
+ */
+export class ViewTracker {
+  private readonly fx = new OneEuroFilter(1.5, 5)
+  private readonly fy = new OneEuroFilter(1.5, 5)
+  private vel: Vec2 = { x: 0, y: 0 }
+  private last: { t: number; p: Vec2 } | null = null
+
+  constructor(private readonly side: Side) {}
+
+  reset(): void {
+    this.fx.reset()
+    this.fy.reset()
+    this.vel = { x: 0, y: 0 }
+    this.last = null
+  }
+
+  /** @param aspect picture width / height (player space has x scaled by it). */
+  update(body: BodyFrame | null, aspect: number, t: number): void {
+    const hand = body?.hands[this.side]
+    if (!hand) {
+      this.reset()
+      return
+    }
+    const p = { x: this.fx.filter(hand.pos.x / aspect, t), y: this.fy.filter(hand.pos.y, t) }
+    if (this.last) {
+      const dt = (t - this.last.t) / 1000
+      if (dt > 0) {
+        this.vel.x += 0.5 * ((p.x - this.last.p.x) / dt - this.vel.x)
+        this.vel.y += 0.5 * ((p.y - this.last.p.y) / dt - this.vel.y)
+      }
+    }
+    this.last = { t, p }
+  }
+
+  /** Position extrapolated to `now` (capped), to hide camera and processing latency. */
+  predict(now: number): Vec2 | null {
+    if (!this.last) return null
+    const ahead = Math.min(Math.max(now - this.last.t, 0), MAX_PREDICT_MS) / 1000
+    return { x: this.last.p.x + this.vel.x * ahead, y: this.last.p.y + this.vel.y * ahead }
   }
 }

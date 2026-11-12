@@ -8,9 +8,12 @@ game, **Balloon Pop**, built with Phaser 4. Milestone 4 makes it a platform: a
 gesture-driven launcher, player slots with saved high scores, settings, optional
 start-on-login, and a packaged offline AppImage. Milestone 5 adds two-player mode
 (Balloon Pop Versus) with split-view tracking. Since then: slicing feel for Balloon Pop,
-per-player **Reach setup**, and a second game, **Meteor Dodge** (lean and crouch).
+per-player **Reach setup**, and a second game, **Meteor Dodge** (step aside and duck).
 No cloud services: models and WASM ship with the app, and all non-local network
 requests are blocked at runtime.
+
+New to the code? **[STACK.md](STACK.md)** explains each layer, why it was chosen and what
+it depends on, for a beginner reader.
 
 ## Install (players)
 
@@ -202,18 +205,19 @@ tests/                vitest unit tests
   to the renderer directory (unit-tested against encoded traversal), and the protocol
   sends a strict CSP.
 - **Security.** `contextIsolation` on, `nodeIntegration` off, `sandbox` on. Only our own
-  origin may use the camera (video only; microphone and all other permissions are denied),
-  popups and navigation away from the app are blocked. The preload exposes only two
-  camera-tuning calls. Their handlers check the caller's origin, accept only a camera
-  label, and run `v4l2-ctl` without a shell, with fixed arguments.
+  origin may use the camera (video only; microphone and all other permissions are denied).
+  Popups, `<webview>` and navigation away from the app are blocked for every page the app
+  could create. The preload exposes a short, fixed list of calls; every handler checks the
+  caller's origin and validates its arguments, and the camera-tuning handler runs
+  `v4l2-ctl` without a shell, with fixed arguments. Only one instance runs at a time.
+  Packaged builds flip Electron fuses (no run-as-Node, no `NODE_OPTIONS`, no `--inspect`,
+  load only from the asar) and have no developer tools or menu bar.
 - **Offline guarantee.** `@mediapipe/tasks-vision` 1.2.2 includes usage telemetry that posts
   to `odml.pa.googleapis.com` and has no public opt-out. It is blocked twice: by CSP
   `connect-src 'self'` and by a main-process `webRequest` guard that cancels every request
   not to the app's own origin (this also covers dev mode). Verified in both modes.
 - **Explicit profile directory.** User data lives in `~/.config/gamemotion`, so the app never
   shares Chromium state with another Electron app.
-- **Phaser 3** is installed (`phaser@3.90`, as specified; the latest release is 4.x) but not
-  used until Milestone 3.
 
 ## Measured performance
 
@@ -425,13 +429,15 @@ reach zone. It's saved per player slot and used whenever that player plays
 
 ### Meteor Dodge (second game)
 
-**Lean** left or right to move your avatar; **crouch** to duck under laser beams (a
-flashing warning stripe shows where they'll sweep, 1 s ahead). Dodge falling meteors,
-catch stars (+50), 3 lives. Points accrue for every second survived, and it speeds up
-over 90 s. Uses the upper-body crouch and lean detectors, so it works with the C270's
-narrow view. The avatar follows you on the menu, so you can try the controls first.
-Versus: two avatars in player colours; the higher score wins. Scores go to
-`meteor-dodge` / `meteor-dodge-2p`. Hands are only used for menus and the pause button.
+Played over the camera view: **your own body in the picture is the target**. **Step
+aside** to dodge falling meteors (a marker at the top shows where each will come down),
+**duck** under laser beams (a flashing stripe at head height warns 1 s ahead), and touch
+stars (+50). 3 lives. Points accrue for every second survived, and it speeds up over
+90 s. A soft outline shows what counts as you (from `services.input.body`); meteors and
+stars are sized to you and fall on or around you, wherever you stand. Ducking uses the
+upper-body crouch detector, so it works with the C270's narrow view. Versus: both
+players share the frame; the higher score wins. Scores go to `meteor-dodge` /
+`meteor-dodge-2p`. Hands are only used for menus and the pause button.
 
 ### Console-style launcher
 
@@ -461,24 +467,33 @@ and a reminder of how to choose; Pause and Game over go straight **Home**. The a
 in **full screen** by default (Settings → "Open in full screen" turns it off; data files
 from before this default are switched over once).
 
-### Karate-chop hands (in games)
+### Games over the camera view
 
-Menus use the palm cursor as before (each hand reaches the whole screen from a small box
-around its own shoulder). During a round of Balloon Pop or Fruit Chop each hand is a
-**blade**, and three things differ (`games/blade.ts`, `playMap` in `input/cursor.ts`):
+Fruit Chop, Balloon Pop and Meteor Dodge are played over the player's own camera picture: you see
+yourself, mirrored, and the fruit or balloons fly through the same frame
+(`GameModule.cameraView`, `games/cameraStage.ts`).
 
-- **Mirror mapping:** one zone centred on the body, shared by both hands, an arm's length
-  past each shoulder. Your left hand is on the left of the screen, and the same hand
-  travel moves the blade the same distance whichever way it goes.
-- **Not clamped:** the blade can leave the screen, so a wide swing keeps its speed (and
-  keeps cutting) instead of stopping dead at the edge.
-- **Aimed along its motion:** the blade points the way the hand is travelling, not the way
-  the fingers point, which this camera can't tell reliably for an edge-on hand.
+- **Layout for any screen:** the picture fills a 16:9 game frame centred in the window,
+  behind a transparent game canvas. The game dims it, frames it, and decorates whatever
+  window is left around it in the game's theme: side panels on an ultrawide screen (with
+  the title and top scores), bands above and below on a taller one, nothing on a 16:9 TV.
+- **Your hand is the blade, where you see it:** in a round, blades are drawn at each
+  hand's real position in the picture (`ViewTracker` in `input/cursor.ts`,
+  `services.input.hands`): no reach zone, not clamped at the edges, and not hidden when
+  lowered. They point along the hand's motion (`games/blade.ts`), which a webcam can tell
+  far more reliably than which way the fingers point. Menus keep the usual cursor.
+- **The action comes to you:** each game follows where the player's body is in the picture
+  (`services.input.body`, `reachArea`). Fruit is aimed to peak within arm's reach and
+  balloons rise within it; fruit size and the speed needed to chop scale with how big the
+  player is in the picture, so standing further back still works.
+- **More feedback:** dark plates behind the HUD so it reads over any picture, the score
+  number jumps when it changes, and the frame washes green on a hit and red on a miss or
+  a bomb.
 
 ### Fruit Chop (third game)
 
-Fruit is tossed up from below and falls back; **chop** it with a fast hand before it
-drops. Solo: 3 lives, a dropped fruit or a chopped bomb costs one, and it gets harder
+Fruit is tossed up from below and lobbed in from the left and right edges; **chop** it
+with a fast hand before it drops. Solo: 5 lives, a dropped fruit or a chopped bomb costs one, and it gets harder
 over 90 s. Versus: 60 s on a shared field, bombs cost 50 points. Three or more fruits in
 one stroke earn a bonus; gold stars are worth 50. Scores go to `fruit-chop` /
 `fruit-chop-2p`. Rules are in `games/fruitChop/logic.ts` (unit-tested).

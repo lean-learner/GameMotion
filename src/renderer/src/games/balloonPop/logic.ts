@@ -109,6 +109,10 @@ export class BalloonPopLogic {
   /** Why the game is paused, for the pause screen. */
   pauseReason: 'player' | 'out-of-view' | null = null
   balloons: Balloon[] = []
+  /** Balloons rise between these x positions (game pixels): where the players can reach. */
+  lane: [number, number] = [0, FIELD.width]
+  /** Per player: their size in the camera view relative to a typical one (scales the pop speed). */
+  speedScale: number[] = [1]
 
   private phaseStart = 0
   private elapsedMs = 0 // playing time only (pauses don't count)
@@ -152,7 +156,11 @@ export class BalloonPopLogic {
 
   /** Whether a hand is currently moving fast enough to pop (for cursor feedback). */
   isArmed(player: number, hand: Side, now: number): boolean {
-    return this.speed(`${player}:${hand}`, now) >= MIN_POP_SPEED
+    return this.speed(`${player}:${hand}`, now) >= this.minSpeed(player)
+  }
+
+  private minSpeed(player: number): number {
+    return MIN_POP_SPEED * (this.speedScale[player] ?? 1)
   }
 
   start(now: number, players = this.players): void {
@@ -227,7 +235,9 @@ export class BalloonPopLogic {
     while (this.elapsedMs >= this.nextSpawnAt) {
       const golden = this.random() < GOLDEN_CHANCE
       const r = golden ? 36 : 46 + this.random() * 14
-      const baseX = r + this.random() * (FIELD.width - 2 * r)
+      const x0 = Math.max(r, this.lane[0])
+      const x1 = Math.max(x0 + 1, Math.min(FIELD.width - r, this.lane[1]))
+      const baseX = x0 + this.random() * (x1 - x0)
       const speed = (110 + 150 * k + this.random() * 40) * (golden ? 1.6 : 1)
       this.balloons.push({
         id: this.nextId++,
@@ -287,7 +297,7 @@ export class BalloonPopLogic {
   private trackStrokes(now: number, hands: HandInput[], out: UpdateResult): void {
     for (const h of hands) {
       const k = key(h)
-      if (h.pos && !this.stroke.has(k) && this.speed(k, now) >= MIN_POP_SPEED) {
+      if (h.pos && !this.stroke.has(k) && this.speed(k, now) >= this.minSpeed(h.player)) {
         this.stroke.set(k, { pops: 0, x: h.pos.x, y: h.pos.y })
         out.strokes.push({ player: h.player, hand: h.hand })
       }
@@ -299,7 +309,7 @@ export class BalloonPopLogic {
     for (const h of hands) {
       const k = key(h)
       const s = this.stroke.get(k)
-      if (!s || (h.pos && this.speed(k, now) >= MIN_POP_SPEED)) continue
+      if (!s || (h.pos && this.speed(k, now) >= this.minSpeed(h.player))) continue
       this.stroke.delete(k)
       if (s.pops >= MULTI_SLICE_MIN) {
         const points = s.pops * MULTI_SLICE_POINTS
@@ -317,7 +327,7 @@ export class BalloonPopLogic {
       if (cur) this.prev.set(k, cur)
       else this.prev.delete(k)
       if (!cur || !prev) continue
-      const armed = this.speed(k, now) >= MIN_POP_SPEED
+      const armed = this.speed(k, now) >= this.minSpeed(h.player)
       // Test the whole path since the last update, so fast swipes still pop.
       const hit = this.balloons.filter((b) => distToSegment(b, prev, cur) <= b.r + CURSOR_RADIUS)
       if (!armed) {

@@ -1,4 +1,4 @@
-import type { HandCursor, Vec2 } from '../input/types'
+import type { Vec2 } from '../input/types'
 
 /** Drawn blade length, in game pixels. */
 export const BLADE_LENGTH = 170
@@ -6,18 +6,6 @@ export const BLADE_LENGTH = 170
 const MIN_MOVE = 4
 /** How quickly the blade turns to a new direction of motion (per rendered frame). */
 const TURN = 0.35
-
-/**
- * Where a hand strikes in an action game, in game pixels: its mirror-mapped,
- * unclamped position (HandCursor.play), so the hand on screen is where the
- * player's hand is and a wide swing can carry on past the screen edge.
- * Falls back to the menu cursor when there is no game mapping (demo input).
- */
-export function bladePoint(cursor: HandCursor | null, width: number, height: number): Vec2 | null {
-  if (!cursor) return null
-  const p = cursor.play ?? cursor
-  return { x: p.x * width, y: p.y * height }
-}
 
 /**
  * "Karate chop" blades point along the hand's own motion: the direction a

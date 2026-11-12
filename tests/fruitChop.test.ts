@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BladeAim, bladePoint } from '../src/renderer/src/games/blade'
+import { BladeAim } from '../src/renderer/src/games/blade'
 import {
   BOMB_PENALTY,
   COMBO_MIN,
@@ -92,6 +92,48 @@ describe('Fruit Chop', () => {
     }
   })
 
+  it('lobs some fruit in from the left and right edges, towards the player', () => {
+    const g = new FruitChopLogic(seeded(5))
+    let t = playing(g)
+    const starts = new Map<number, { x: number; vx: number }>()
+    for (; t < COUNTDOWN_MS + 30_000; t += 16) {
+      g.update(t, [])
+      g.lives = LIVES // keep the round going
+      for (const it of g.items) if (!starts.has(it.id)) starts.set(it.id, { x: it.x, vx: it.vx })
+    }
+    const fromLeft = [...starts.values()].filter((s) => s.x < 0)
+    const fromRight = [...starts.values()].filter((s) => s.x > FIELD.width)
+    expect(fromLeft.length).toBeGreaterThan(0)
+    expect(fromRight.length).toBeGreaterThan(0)
+    for (const s of fromLeft) expect(s.vx).toBeGreaterThan(0)
+    for (const s of fromRight) expect(s.vx).toBeLessThan(0)
+  })
+
+  it('aims fruit at where the player can reach, and sizes it to the player', () => {
+    const g = new FruitChopLogic(seeded(7))
+    // A small (far away) player standing on the left of the picture.
+    const area = { x0: 150, x1: 550, top: 250, bottom: 520, scale: 0.7 }
+    g.areas = [area]
+    let t = playing(g)
+    const peak = new Map<number, { x: number; y: number; r: number }>()
+    for (; t < COUNTDOWN_MS + 20_000; t += 16) {
+      g.update(t, [])
+      g.lives = LIVES
+      for (const it of g.items) {
+        const p = peak.get(it.id)
+        if (!p || it.y < p.y) peak.set(it.id, { x: it.x, y: it.y, r: it.r })
+      }
+    }
+    expect(peak.size).toBeGreaterThan(5)
+    for (const p of peak.values()) {
+      expect(p.x).toBeGreaterThan(area.x0 - 130)
+      expect(p.x).toBeLessThan(area.x1 + 130)
+      expect(p.y).toBeGreaterThan(area.top - 30)
+      expect(p.y).toBeLessThan(area.bottom)
+      expect(p.r).toBeLessThan(50)
+    }
+  })
+
   it('chops with a fast hand but not a slow one', () => {
     const g = new FruitChopLogic(seeded())
     const t = playing(g)
@@ -125,15 +167,16 @@ describe('Fruit Chop', () => {
     const r = sweep(g, t + 16, 400, 880, 250)
     expect(r.bombs).toBe(1)
     expect(g.lives).toBe(LIVES - 1)
-    // Two fruits fall out of the bottom.
-    const items = place(g, 'fruit', [300, 900], FIELD.height - 10)
+    // The rest of the lives go on fruit falling out of the bottom.
+    const xs = Array.from({ length: LIVES - 1 }, (_, i) => 200 + i * 200)
+    const items = place(g, 'fruit', xs, FIELD.height - 10)
     for (const it of items) it.vy = 400
     t = r.t
     let dropped = 0
     for (let i = 0; i < 30 && g.phase === 'playing'; i++, t += 16) {
       dropped += g.update(t, []).dropped.length
     }
-    expect(dropped).toBe(2)
+    expect(dropped).toBe(LIVES - 1)
     expect(g.lives).toBe(0)
     expect(g.phase).toBe('gameover')
   })
@@ -177,16 +220,6 @@ describe('Fruit Chop', () => {
 })
 
 describe('chop blade', () => {
-  it('strikes at the mirror-mapped hand, which may be off screen', () => {
-    const cursor = { x: 1, y: 0.5, play: { x: 1.2, y: 0.5 } }
-    expect(bladePoint(cursor, 1280, 720)).toEqual({ x: 1536, y: 360 })
-  })
-
-  it('falls back to the menu cursor without a game mapping', () => {
-    expect(bladePoint({ x: 0.25, y: 0.5 }, 1280, 720)).toEqual({ x: 320, y: 360 })
-    expect(bladePoint(null, 1280, 720)).toBeNull()
-  })
-
   it('points along the motion, keeps its direction when still, and snaps on a reversal', () => {
     const aim = new BladeAim()
     expect(aim.aim('h', { x: 100, y: 100 })).toBeCloseTo(-Math.PI / 2) // no motion yet

@@ -284,3 +284,35 @@ body.game-mode .stage {
 body.game-mode .settings {
   display: none;
 }
+
+/* ---- Games played over the camera view: the mirrored picture fills the 16:9 game
+   frame, centred in the window, behind a transparent game canvas. The game itself
+   dims the picture and decorates whatever window is left around the frame. */
+body.game-mode.camera-play .stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  aspect-ratio: 16 / 9;
+  width: min(100cqw, calc(100cqh * 16 / 9));
+  height: auto;
+  z-index: 0;
+  opacity: 1;
+  border: none;
+  border-radius: 0;
+}
+
+body.game-mode.camera-play .stage video {
+  object-fit: cover;
+}
+
+body.game-mode.camera-play #overlay {
+  display: none;
+}
+
+body.game-mode.camera-play #game-root {
+  background: transparent;
+  z-index: 1;
+}

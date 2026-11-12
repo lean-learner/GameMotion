@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, protocol, session, systemPreferences } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, protocol, session, systemPreferences } from 'electron'
+import { execFile } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
@@ -7,7 +8,6 @@ import { resolveAppPath, mimeFor, originOf, APP_SCHEME, APP_HOST } from './appPr
 import { setupSelfTest } from './selfTest'
 import { CameraTuning } from './cameraTuning'
 import { addScore, cleanCamera, cleanName, cleanReach, Store } from './store'
-import { execFile } from 'node:child_process'
 import { hasShortcuts, installShortcuts, isAutostartEnabled, setAutostart } from './autostart'
 
 // Serve the production renderer from a privileged custom scheme instead of
@@ -42,7 +42,9 @@ const CSP = [
   "media-src 'self' blob: mediastream:",
   "connect-src 'self'",
   "object-src 'none'",
-  "base-uri 'none'"
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'"
 ].join('; ')
 
 function registerAppProtocol(): void {
@@ -52,7 +54,11 @@ function registerAppProtocol(): void {
     try {
       const body = await readFile(file)
       return new Response(body, {
-        headers: { 'content-type': mimeFor(file), 'content-security-policy': CSP }
+        headers: {
+          'content-type': mimeFor(file),
+          'content-security-policy': CSP,
+          'x-content-type-options': 'nosniff'
+        }
       })
     } catch {
       return new Response('Not found', { status: 404 })
@@ -98,6 +104,18 @@ function blockExternalRequests(): void {
   })
 }
 
+// Applies to every page the app could ever create, not just the main window:
+// no popups, no embedded <webview>, no navigating away from the app.
+function lockDownWebContents(): void {
+  app.on('web-contents-created', (_event, contents) => {
+    contents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    contents.on('will-attach-webview', (event) => event.preventDefault())
+    contents.on('will-navigate', (event, url) => {
+      if (!isAppOrigin(url)) event.preventDefault()
+    })
+  })
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     fullscreen: store.data.settings.startFullscreen,
@@ -116,6 +134,10 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      // Nothing is typed into web forms; this also avoids dictionary downloads.
+      spellcheck: false,
+      // Installed builds have no developer tools; `npm start` and `npm run dev` keep them.
+      devTools: !app.isPackaged,
       // Keep tracking running at full rate if the window loses focus.
       backgroundThrottling: false,
       // Players stand away from the PC, so game sounds must not wait for a click.
@@ -129,12 +151,6 @@ function createWindow(): BrowserWindow {
   win.webContents.on('render-process-gone', () => void cameraTuning.restore())
   win.webContents.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) void cameraTuning.restore()
-  })
-
-  // No popups, no navigating away from the app.
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  win.webContents.on('will-navigate', (event, url) => {
-    if (!isAppOrigin(url)) event.preventDefault()
   })
 
   // F11 toggles fullscreen; F12 opens DevTools in development.
@@ -164,7 +180,6 @@ let store: Store
 const fromApp = (e: Electron.IpcMainInvokeEvent): boolean =>
   !!e.senderFrame && isAppOrigin(e.senderFrame.url)
 
-/** How to launch this app again (for auto-start). */
 /**
  * Start on login. Windows and macOS use Electron's login-item setting; Linux
  * has no such API in Electron, so it uses an XDG autostart .desktop file.
@@ -184,6 +199,7 @@ function applyAutostart(enabled: boolean): void {
   app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath, args })
 }
 
+/** How to launch this app again (for auto-start). */
 function launchCommand(): string[] {
   if (process.env['APPIMAGE']) return [process.env['APPIMAGE']]
   return app.isPackaged ? [process.execPath] : [process.execPath, app.getAppPath()]
@@ -252,7 +268,11 @@ function registerStoreIpc(): void {
   })
   ipcMain.handle('settings:set', (e, change: unknown) => {
     guard(e)
-    const c = (change ?? {}) as { startFullscreen?: unknown; autostart?: unknown; camera?: unknown }
+    const c = (change ?? {}) as {
+      startFullscreen?: unknown
+      autostart?: unknown
+      camera?: unknown
+    }
     if (typeof c.startFullscreen === 'boolean') {
       const startFullscreen = c.startFullscreen
       store.update((d) => ({ ...d, settings: { ...d.settings, startFullscreen } }))
@@ -311,7 +331,10 @@ function registerCameraTuningIpc(): void {
     if (!fromApp(e)) throw new Error('forbidden')
     await cameraTuning.restore()
   })
-  // Guided test reports: numbers only, written to a fixed folder the page can't choose.
+}
+
+// Guided test reports: numbers only, written to a fixed folder the page can't choose.
+function registerTestReportIpc(): void {
   ipcMain.handle('test-report:save', async (e, json: unknown) => {
     if (!fromApp(e)) throw new Error('forbidden')
     if (typeof json !== 'string' || json.length > 200_000) throw new Error('invalid report')
@@ -326,7 +349,24 @@ function registerCameraTuningIpc(): void {
   })
 }
 
+// One copy at a time: a webcam can only be opened by one program. Starting the
+// app again brings the running window forward instead.
+const isFirstInstance = app.requestSingleInstanceLock()
+if (!isFirstInstance) app.quit()
+app.on('second-instance', () => {
+  const win = BrowserWindow.getAllWindows()[0]
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  win.focus()
+})
+lockDownWebContents()
+
 app.whenReady().then(async () => {
+  if (!isFirstInstance) return
+  // Installed builds on Windows and Linux need no menu bar (it would only offer
+  // reload and developer tools). macOS keeps its standard menu for Quit and Hide.
+  if (app.isPackaged && process.platform !== 'darwin') Menu.setApplicationMenu(null)
+
   // macOS asks the user for camera access once; other systems need no prompt.
   if (
     process.platform === 'darwin' &&
@@ -339,6 +379,7 @@ app.whenReady().then(async () => {
   cameraTuning.recoverFromCrash()
   store = new Store(join(app.getPath('userData'), 'gamemotion-data.json'))
   registerCameraTuningIpc()
+  registerTestReportIpc()
   registerStoreIpc()
   registerAppProtocol()
   restrictPermissions()

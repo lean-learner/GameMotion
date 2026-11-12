@@ -1,4 +1,4 @@
-import type { HandCursor, InputEvent, MotionSnapshot, Side } from '../input/types'
+import type { HandCursor, InputEvent, MotionSnapshot, Side, Vec2 } from '../input/types'
 
 export interface Player {
   slot: number
@@ -31,6 +31,18 @@ export interface GameServices {
      * per rendered frame. `player` defaults to 0 (the only player in 1-player mode).
      */
     cursors(now: number, player?: number): Record<Side, HandCursor | null>
+    /**
+     * A player's hands where they appear in the camera view, for games played
+     * over it: 0..1 across and down the game frame (the mirrored picture fills
+     * it), unclamped, predicted to `now`. Null when the camera can't see the hand.
+     */
+    hands(now: number, player?: number): Record<Side, Vec2 | null>
+    /**
+     * Where a player's body is in the game frame, for placing things within
+     * reach: shoulder centre (0..1) and shoulder width as a share of the frame
+     * width. Null when the player isn't seen.
+     */
+    body(player?: number): { x: number; y: number; shoulderWidth: number } | null
     /** A player's latest motion state (calibration, tracked, lean, crouch). */
     snapshot(player?: number): MotionSnapshot | null
     /** Subscribe to gesture events of every player; returns an unsubscribe function. */
@@ -78,6 +90,8 @@ export interface LauncherServices extends GameServices {
 export interface GameModule {
   id: string
   title: string
+  /** Played over the live camera picture: the platform shows it behind the game. */
+  cameraView?: boolean
   /**
    * Starts the game inside `parent`; resolves to a function that stops it.
    * `options.autostart` skips the menu (used by the automated self-test).

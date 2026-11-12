@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
-import type { HandCursor, Vec2 } from '../../input/types'
-import { BLADE_LENGTH, BladeAim, bladePoint } from '../blade'
+import type { Vec2 } from '../../input/types'
+import { BLADE_LENGTH, BladeAim } from '../blade'
+import { CameraStage, hudPlate, reachArea, type StageTheme } from '../cameraStage'
 import type { Sfx } from '../sfx'
 import type { GameServices, Player } from '../types'
 import {
@@ -31,6 +32,21 @@ const W = FIELD.width
 const H = FIELD.height
 const COLORS = [0xff4d6d, 0xffa53d, 0xffe14d, 0x4dd17a, 0x4da3ff, 0xb26bff]
 const GOLD = 0xffd23f
+/** The surround: sky blue scattered with balloons. */
+const SKY: StageTheme = {
+  top: 0x1f5fa8,
+  bottom: 0x7cc4ff,
+  accent: 0xffd23f,
+  motif: (g, x, y, s, index) => {
+    const r = 24 * s
+    g.lineStyle(2, 0xffffff, 0.5)
+    g.lineBetween(x, y + r * 1.1, x + 5 * s, y + r * 2.2)
+    g.fillStyle(COLORS[index % COLORS.length], 0.6)
+    g.fillEllipse(x, y, r * 1.8, r * 2.2)
+    g.fillStyle(0xffffff, 0.22)
+    g.fillEllipse(x - r * 0.3, y - r * 0.45, r * 0.4, r * 0.6)
+  }
+}
 /** Texture balloons are drawn at; sprites are scaled to each balloon's radius. */
 const TEX_R = 60
 /** The game pauses itself when a player has been out of view this long. */
@@ -55,6 +71,9 @@ export class BalloonPopScene extends Phaser.Scene {
   private pauseButton!: DwellButtons
   private cursorLayer!: CursorLayer
   private trails!: TrailLayer
+  private stage!: CameraStage
+  private hudPlates!: Phaser.GameObjects.Graphics
+  private shownScores: number[] = []
   private readonly aim = new BladeAim()
   /** Increments every round, so a late score-save result can't land on the wrong screen. */
   private round = 0
@@ -87,7 +106,8 @@ export class BalloonPopScene extends Phaser.Scene {
     this.players = this.services.players()
     this.logic.players = this.players.length
     this.makeTextures()
-    this.drawBackground()
+    this.stage = new CameraStage(this, SKY, this.versus ? 'Balloon Pop Versus' : 'Balloon Pop')
+    this.hudPlates = this.add.graphics().setDepth(29)
 
     this.sparks = this.add.particles(0, 0, 'spark', {
       speed: { min: 120, max: 420 },
@@ -103,7 +123,7 @@ export class BalloonPopScene extends Phaser.Scene {
     // One score per player: left player top-left, right player top-right (left of the pause button).
     const scores = this.players.map((p, i) =>
       this.add
-        .text(i === 0 ? 28 : W - 150, 20, '', {
+        .text(i === 0 ? 46 : W - 176, 24, '', {
           ...hudStyle,
           color: this.versus ? p.color : '#ffffff'
         })
@@ -114,12 +134,12 @@ export class BalloonPopScene extends Phaser.Scene {
     this.hud = {
       scores,
       time: this.add
-        .text(W / 2, 20, '', hudStyle)
+        .text(W / 2, 24, '', hudStyle)
         .setOrigin(0.5, 0)
         .setDepth(30)
         .setStroke('#1d3557', 6),
       combo: this.add
-        .text(28, 64, '', { ...hudStyle, fontSize: '26px', color: '#ffe14d' })
+        .text(46, 84, '', { ...hudStyle, fontSize: '26px', color: '#ffe14d' })
         .setDepth(30)
         .setStroke('#1d3557', 5)
     }
@@ -143,20 +163,21 @@ export class BalloonPopScene extends Phaser.Scene {
 
   update(): void {
     const now = performance.now()
-    // During a round each hand is a blade (karate chop), placed like a mirror image of
-    // the player's hand and pointing the way it moves. In menus it is the usual cursor.
+    // During a round each hand is a blade (karate chop) pointing the way it moves.
+    // In menus it is the usual cursor.
     const chopping = this.logic.phase === 'playing' || this.logic.phase === 'countdown'
-    const px = (v: HandCursor | null): Vec2 | null =>
-      chopping ? bladePoint(v, W, H) : v ? { x: v.x * W, y: v.y * H } : null
+    const px = (v: Vec2 | null): Vec2 | null => (v ? { x: v.x * W, y: v.y * H } : null)
     const hands: HandInput[] = []
     const angles: (number | undefined)[] = []
     const fists: (boolean | undefined)[] = []
     const screenHands: (Vec2 | null)[] = []
     this.players.forEach((_, player) => {
       const c = this.services.input.cursors(now, player)
+      // In a round the blade is the player's own hand, right where they see it.
+      const h = chopping ? this.services.input.hands(now, player) : c
       hands.push(
-        { player, hand: 'left', pos: px(c.left) },
-        { player, hand: 'right', pos: px(c.right) }
+        { player, hand: 'left', pos: px(h.left) },
+        { player, hand: 'right', pos: px(h.right) }
       )
       screenHands.push(c.left, c.right)
       fists.push(chopping ? undefined : c.left?.fist, chopping ? undefined : c.right?.fist)
@@ -167,6 +188,7 @@ export class BalloonPopScene extends Phaser.Scene {
       angles.push(chopping && h.pos ? angle : undefined)
     }
 
+    this.followPlayers()
     this.autoPause(now)
     const { pops, bumps, bonuses, strokes } = this.logic.update(now, hands)
     if (strokes.length) this.sfx.swoosh()
@@ -205,6 +227,20 @@ export class BalloonPopScene extends Phaser.Scene {
     // "Armed" glow while playing: the hand is moving fast enough to pop.
     const armed = this.logic.phase === 'playing' && this.logic.isArmed(h.player, h.hand, now)
     return { pos: h.pos, color, armed }
+  }
+
+  /** Keeps the balloons where the players can reach them, wherever they stand in the picture. */
+  private followPlayers(): void {
+    const areas = this.players.map((_, i) => {
+      const body = this.services.input.body(i)
+      return body ? reachArea(body) : null
+    })
+    const seen = areas.filter((a) => a !== null)
+    if (!seen.length) return // keep the last lane while nobody is seen
+    this.logic.lane = [Math.min(...seen.map((a) => a.x0)), Math.max(...seen.map((a) => a.x1))]
+    areas.forEach((a, i) => {
+      if (a) this.logic.speedScale[i] = a.scale
+    })
   }
 
   // ---- Game flow ---------------------------------------------------------------
@@ -410,6 +446,10 @@ export class BalloonPopScene extends Phaser.Scene {
       status.setColor(bests.length ? '#ffe14d' : '#ffffff').setFontSize(bests.length ? 34 : 28)
       // The last save has the most complete table.
       const top = saved[saved.length - 1]!.top
+      this.stage.setInfo([
+        'Top scores',
+        ...top.slice(0, 5).map((r, i) => `${i + 1}. ${r.name}  ${r.score}`)
+      ])
       line(this.versus ? 'Top versus scores' : 'Top scores', 0.49, 26)
       top
         .slice(0, 3)
@@ -459,6 +499,7 @@ export class BalloonPopScene extends Phaser.Scene {
     if (b.kind === 'golden') this.sfx.chime()
     else this.sfx.pop(p.combo)
     this.sliceHalves(p)
+    this.stage.pulse(color, b.kind === 'golden' ? 0.3 : 0.14)
     // In versus the points float up in the scorer's colour.
     const textColor = this.versus
       ? this.players[p.player].color
@@ -567,21 +608,36 @@ export class BalloonPopScene extends Phaser.Scene {
   private updateHud(now: number): void {
     const L = this.logic
     const inGame = L.phase === 'playing' || L.phase === 'countdown' || L.phase === 'paused'
-    this.hud.scores.forEach((t, i) =>
+    const g = this.hudPlates
+    g.clear()
+    this.hud.scores.forEach((t, i) => {
       t.setText(
         inGame
           ? this.versus
-            ? `${this.players[i].name} ${L.scores[i]}`
-            : `Score ${L.scores[i]}`
+            ? `${this.players[i].name}  ${L.scores[i]}`
+            : `Score  ${L.scores[i]}`
           : ''
       )
-    )
-    this.hud.time.setText(inGame ? `${Math.ceil(L.timeLeftMs / 1000)}s` : '')
+      if (!inGame) return
+      const w = t.width + 44
+      const x = i === 0 ? 24 : W - 154 - w
+      hudPlate(g, x, 14, w, 60, this.versus ? hex(this.players[i].color) : GOLD)
+      // The number jumps when it changes.
+      if (this.shownScores[i] !== undefined && L.scores[i] !== this.shownScores[i]) {
+        this.tweens.killTweensOf(t)
+        t.setScale(1.25)
+        this.tweens.add({ targets: t, scale: 1, duration: 220, ease: 'back.out' })
+      }
+      this.shownScores[i] = L.scores[i]
+    })
+    const time = this.hud.time
+    time.setText(inGame ? `${Math.ceil(L.timeLeftMs / 1000)}s` : '')
+    if (inGame) hudPlate(g, W / 2 - time.width / 2 - 24, 14, time.width + 48, 60)
     const mult = comboMultiplier(L.combos[0] ?? 0)
     this.hud.combo.setText(inGame && !this.versus && mult > 1 ? `Combo x${mult}` : '')
     // Last 10 seconds: pulse the timer red.
     const urgent = L.phase === 'playing' && L.timeLeftMs <= 10_000
-    this.hud.time.setColor(urgent && Math.floor(now / 400) % 2 === 0 ? '#ff4d6d' : '#ffffff')
+    time.setColor(urgent && Math.floor(now / 400) % 2 === 0 ? '#ff4d6d' : '#ffffff')
   }
 
   // ---- Generated art (no image files) --------------------------------------------
@@ -616,28 +672,6 @@ export class BalloonPopScene extends Phaser.Scene {
       g.fillCircle(6, 6, 6)
       g.generateTexture('spark', 12, 12)
       g.destroy()
-    }
-  }
-
-  private drawBackground(): void {
-    const sky = this.add.graphics().setDepth(0)
-    sky.fillGradientStyle(0x5fb8ff, 0x5fb8ff, 0xcdeeff, 0xcdeeff, 1, 1, 1, 1)
-    sky.fillRect(0, 0, W, H)
-    for (let i = 0; i < 6; i++) {
-      const cloud = this.add.graphics().setDepth(1).setAlpha(0.85)
-      cloud.fillStyle(0xffffff, 1)
-      const s = 0.6 + Math.random() * 0.8
-      cloud.fillEllipse(0, 0, 160 * s, 60 * s)
-      cloud.fillEllipse(-50 * s, 10 * s, 110 * s, 50 * s)
-      cloud.fillEllipse(55 * s, 8 * s, 120 * s, 54 * s)
-      cloud.setPosition(Math.random() * W, 60 + Math.random() * (H * 0.6))
-      this.tweens.add({
-        targets: cloud,
-        x: { from: -200, to: W + 200 },
-        duration: 40_000 + Math.random() * 40_000,
-        delay: -Math.random() * 40_000,
-        repeat: -1
-      })
     }
   }
 }

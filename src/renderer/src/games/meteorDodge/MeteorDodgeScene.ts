@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import type { Vec2 } from '../../input/types'
 import { playerInView } from '../balloonPop/logic'
+import { CameraStage, hudPlate, type StageTheme } from '../cameraStage'
 import type { Sfx } from '../sfx'
 import type { GameServices, Player } from '../types'
 import {
@@ -13,11 +14,8 @@ import {
   type CursorDraw
 } from '../ui'
 import {
-  AVATAR,
-  BEAM_BAND,
   BEAM_WARNING_MS,
   FIELD,
-  GROUND_Y,
   LIVES,
   MeteorDodgeLogic,
   type GameEvent,
@@ -30,15 +28,50 @@ const H = FIELD.height
 const OUT_OF_VIEW_MS = 1000
 const PAUSE_BUTTON: Button = { id: 'pause', label: 'II', x: 0.905, y: 0.03, w: 0.08, h: 0.11 }
 const tableId = (players: number): string => (players > 1 ? 'meteor-dodge-2p' : 'meteor-dodge')
+/** Body size from the shoulders, in shoulder widths: half the width, and shoulders to top of head. */
+const BODY_HALF = 0.75
+const HEAD_ABOVE = 0.95
+/** Laser thickness, as a share of the body's half width. */
+const BEAM_THICKNESS = 0.45
+
+/** The surround: deep space with stars and the odd planet. */
+const SPACE: StageTheme = {
+  top: 0x050816,
+  bottom: 0x1b2a5a,
+  accent: 0x6bd0ff,
+  motif: (g, x, y, s, index) => {
+    if (index % 4 === 0) {
+      const r = 24 * s
+      g.fillStyle([0xff8a3d, 0x9b7bff, 0x4dd6a8][index % 3], 0.5)
+      g.fillCircle(x, y, r)
+      g.lineStyle(3, 0xffffff, 0.25)
+      g.strokeEllipse(x, y, r * 3, r * 0.8)
+      return
+    }
+    g.fillStyle(0xffffff, 0.75)
+    g.fillCircle(x, y, 2.5 * s)
+    g.fillCircle(x + 46 * s, y - 30 * s, 1.6 * s)
+    g.fillCircle(x - 38 * s, y + 34 * s, 1.8 * s)
+    g.fillStyle(0xffe14d, 0.6)
+    g.fillCircle(x - 20 * s, y - 44 * s, 2 * s)
+  }
+}
 
 /**
- * Meteor Dodge: lean to move, crouch to duck under laser beams, dodge
- * meteors, catch stars. Rules live in MeteorDodgeLogic; this scene draws.
+ * Meteor Dodge, played over the camera view: your own body is the target.
+ * Step aside to dodge meteors, duck under laser beams, touch stars.
+ * Rules live in MeteorDodgeLogic; this scene draws.
  */
 export class MeteorDodgeScene extends Phaser.Scene {
   private readonly logic = new MeteorDodgeLogic()
   private players: Player[] = []
-  private avatars: Phaser.GameObjects.Container[] = []
+  private stage!: CameraStage
+  private shields!: Phaser.GameObjects.Graphics
+  private hudPlates!: Phaser.GameObjects.Graphics
+  private labels: Phaser.GameObjects.Text[] = []
+  /** Top of each player's head while standing: lasers are drawn at this height. */
+  private standTop: number[] = []
+  private shownScores: number[] = []
   private readonly meteorSprites = new Map<number, Phaser.GameObjects.Image>()
   private readonly starSprites = new Map<number, Phaser.GameObjects.Image>()
   private fx!: Phaser.GameObjects.Graphics
@@ -71,25 +104,26 @@ export class MeteorDodgeScene extends Phaser.Scene {
     this.players = this.services.players()
     this.logic.prepare(this.players.length)
     this.makeTextures()
-    this.drawBackground()
+    this.stage = new CameraStage(this, SPACE, this.versus ? 'Meteor Dodge Versus' : 'Meteor Dodge')
     this.fx = this.add.graphics().setDepth(15)
-    this.avatars = this.players.map((p) => {
-      const body = this.add.image(0, 0, `avatar-${p.slot}`).setOrigin(0.5, 1)
-      const label = this.add
-        .text(0, -AVATAR.standing - 14, this.versus ? p.name : '', {
+    this.shields = this.add.graphics().setDepth(12)
+    this.hudPlates = this.add.graphics().setDepth(29)
+    this.labels = this.players.map((p) =>
+      this.add
+        .text(0, 0, this.versus ? p.name : '', {
           fontFamily: FONT,
           fontSize: '22px',
           fontStyle: 'bold',
           color: p.color
         })
         .setOrigin(0.5, 1)
+        .setDepth(20)
         .setStroke('#0b1020', 5)
-      return this.add.container(0, GROUND_Y, [body, label]).setDepth(20)
-    })
+    )
     const style = { fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: '#ffffff' }
     this.hud = this.players.map((p, i) =>
       this.add
-        .text(i === 0 ? 28 : W - 150, 20, '', {
+        .text(i === 0 ? 46 : W - 176, 26, '', {
           ...style,
           color: this.versus ? p.color : '#ffffff'
         })
@@ -98,7 +132,7 @@ export class MeteorDodgeScene extends Phaser.Scene {
         .setStroke('#0b1020', 6)
     )
     this.timeText = this.add
-      .text(W / 2, 20, '', style)
+      .text(W / 2, 26, '', style)
       .setOrigin(0.5, 0)
       .setDepth(30)
       .setStroke('#0b1020', 6)
@@ -130,9 +164,17 @@ export class MeteorDodgeScene extends Phaser.Scene {
 
   update(): void {
     const now = performance.now()
-    const inputs: PlayerInput[] = this.players.map((_, i) => {
-      const s = this.services.input.snapshot(i)
-      return { lean: s?.lean ?? 0, crouching: s?.crouching ?? false }
+    // Each player's body where it appears in the picture (null while they aren't seen).
+    const inputs: (PlayerInput | null)[] = this.players.map((_, i) => {
+      const body = this.services.input.body(i)
+      if (!body) return null
+      const sw = body.shoulderWidth * W
+      return {
+        x: body.x * W,
+        top: body.y * H - HEAD_ABOVE * sw,
+        half: BODY_HALF * sw,
+        crouching: this.services.input.snapshot(i)?.crouching ?? false
+      }
     })
     this.autoPause(now)
     for (const e of this.logic.update(now, inputs)) this.onEvent(e)
@@ -215,20 +257,15 @@ export class MeteorDodgeScene extends Phaser.Scene {
     if (e.type === 'hit') {
       console.info(`[game] player ${e.player + 1} hit by ${e.by}, ${e.livesLeft} lives left`)
       this.sfx.thud()
-      this.cameras.main.shake(220, 0.012)
-      this.cameras.main.flash(160, 255, 60, 60)
-      this.floatText(
-        p.x,
-        GROUND_Y - AVATAR.standing - 40,
-        e.by === 'beam' ? 'Duck!' : 'Ouch!',
-        '#ff6b6b'
-      )
+      this.stage.pulse(0xff3b3b, 0.4, 420)
+      this.floatText(p.x, Math.max(120, p.top - 30), e.by === 'beam' ? 'Duck!' : 'Ouch!', '#ff6b6b')
     } else if (e.type === 'star') {
       this.sfx.chime()
+      this.stage.pulse(0xffe14d, 0.16)
       this.floatText(e.x, e.y, '+50', this.versus ? this.players[e.player].color : '#ffe14d')
     } else if (e.type === 'out') {
       console.info(`[game] player ${e.player + 1} out`)
-      this.floatText(p.x, GROUND_Y - AVATAR.standing - 60, 'OUT', '#ff6b6b', 56)
+      this.floatText(p.x, Math.max(130, p.top - 50), 'OUT', '#ff6b6b', 56)
     }
   }
 
@@ -285,8 +322,8 @@ export class MeteorDodgeScene extends Phaser.Scene {
       case 'menu':
         dim()
         text(this.versus ? 'Meteor Dodge Versus' : 'Meteor Dodge', 0.2, 80, '#ffffff', true)
-        text('Lean to move  ·  Crouch to duck the lasers', 0.37, 34)
-        text('Dodge meteors  ·  Catch stars  ·  3 lives', 0.45, 26)
+        text('Step aside to dodge  ·  Duck under the lasers', 0.37, 34)
+        text(`Touch stars for points  ·  ${LIVES} lives`, 0.45, 26)
         buttons = [btn('start', 'Start', 0.38, 0.7), btn('quit', 'Back', 0.62, 0.7)]
         text('Point and hold to choose  ·  a fist is faster', 0.9, 22, '#b8b8b8')
         break
@@ -344,6 +381,10 @@ export class MeteorDodgeScene extends Phaser.Scene {
       if (bests.length)
         text(this.versus ? `New best: ${bests.join(' & ')}!` : 'New best!', 0.42, 32, '#ffe14d')
       const top = saved[saved.length - 1]!.top
+      this.stage.setInfo([
+        'Top scores',
+        ...top.slice(0, 5).map((r, i) => `${i + 1}.  ${r.name}   ${r.score}`)
+      ])
       text(
         ['Top scores', ...top.slice(0, 3).map((r, i) => `${i + 1}.  ${r.name}   ${r.score}`)].join(
           '\n'
@@ -364,7 +405,7 @@ export class MeteorDodgeScene extends Phaser.Scene {
       const s = this.services.input.snapshot(i)
       const who = this.versus ? `${p.name}: ` : ''
       if (!s?.tracked) return `${who}Step into view`
-      if (s.calibration.status === 'calibrated') return `${who}Ready  ·  try leaning and crouching`
+      if (s.calibration.status === 'calibrated') return `${who}Ready  ·  try a step and a duck`
       return `${who}Stand still a moment… ${Math.round(s.calibration.progress * 100)}%`
     })
     this.calibText.setText(lines.join('\n'))
@@ -374,17 +415,22 @@ export class MeteorDodgeScene extends Phaser.Scene {
 
   private syncObjects(now: number): void {
     const L = this.logic
-    // Avatars: squash when crouching, blink while invulnerable, fade when out.
+    // A soft outline around each player shows what counts as "you".
+    const sg = this.shields
+    sg.clear()
     L.players.forEach((p, i) => {
-      const a = this.avatars[i]
-      a.setX(p.x)
-      const body = a.list[0] as Phaser.GameObjects.Image
-      body.setScale(1, p.crouching ? AVATAR.crouched / AVATAR.standing : 1)
-      ;(a.list[1] as Phaser.GameObjects.Text).setY(
-        -(p.crouching ? AVATAR.crouched : AVATAR.standing) - 14
-      )
+      if (!p.crouching || this.standTop[i] === undefined) {
+        const was = this.standTop[i] ?? p.top
+        this.standTop[i] = was + (p.top - was) * 0.1
+      }
+      const color = this.versus ? hex(this.players[i].color) : 0x6bd0ff
       const blinking = now < p.invulnerableUntil && Math.floor(now / 100) % 2 === 0
-      a.setAlpha(!p.alive ? 0.25 : blinking ? 0.35 : 1)
+      const alpha = !p.alive ? 0.12 : blinking ? 0.15 : 0.7
+      sg.lineStyle(10, color, alpha * 0.25)
+      sg.strokeRoundedRect(p.x - p.half, p.top, p.half * 2, H - p.top + 60, p.half * 0.8)
+      sg.lineStyle(3, color, alpha)
+      sg.strokeRoundedRect(p.x - p.half, p.top, p.half * 2, H - p.top + 60, p.half * 0.8)
+      this.labels[i].setPosition(p.x, Math.max(40, p.top - 10)).setAlpha(p.alive ? 1 : 0.3)
     })
 
     // Meteors and stars.
@@ -401,60 +447,79 @@ export class MeteorDodgeScene extends Phaser.Scene {
     const g = this.fx
     g.clear()
     for (const m of L.meteors) {
+      if (m.y + m.r < 0) {
+        // Still above the frame: mark where it will come down.
+        const blink = 0.45 + 0.4 * Math.sin(now / 70)
+        g.fillStyle(0xff8a3d, blink)
+        g.fillTriangle(m.x - 20, 12, m.x + 20, 12, m.x, 42)
+        g.fillStyle(0xff8a3d, 0.1)
+        g.fillRect(m.x - m.r, 0, m.r * 2, H)
+        continue
+      }
       g.lineStyle(m.r * 1.2, 0xff8a3d, 0.25)
       g.lineBetween(m.x, m.y - m.r * 3, m.x, m.y)
       g.lineStyle(m.r * 0.6, 0xffd36b, 0.4)
       g.lineBetween(m.x, m.y - m.r * 2, m.x, m.y)
     }
+    // Lasers sweep at standing head height (the average, with two players).
+    const n = Math.max(1, L.players.length)
+    const headTop = L.players.reduce((sum, p, i) => sum + (this.standTop[i] ?? p.top), 0) / n
+    const thick = Math.max(26, (L.players.reduce((sum, p) => sum + p.half, 0) / n) * BEAM_THICKNESS)
+    const y0 = Math.max(60, headTop)
     for (const b of L.beams) {
       const warming = now - b.warnedAt < BEAM_WARNING_MS
       if (warming) {
-        // Flashing warning stripe across the whole field at head height.
+        // Flashing warning stripe across the whole frame at head height.
         if (Math.floor(now / 150) % 2 === 0) {
-          g.fillStyle(0xff3b3b, 0.25)
-          g.fillRect(0, BEAM_BAND.top, W, BEAM_BAND.bottom - BEAM_BAND.top)
+          g.fillStyle(0xff3b3b, 0.3)
+          g.fillRect(0, y0, W, thick)
         }
         continue
       }
       const [l, r] = b.dir === 1 ? [b.x - b.length, b.x] : [b.x, b.x + b.length]
-      g.fillStyle(0xff3b3b, 0.35)
-      g.fillRect(l, BEAM_BAND.top - 8, r - l, BEAM_BAND.bottom - BEAM_BAND.top + 16)
+      g.fillStyle(0xff3b3b, 0.4)
+      g.fillRect(l, y0 - 8, r - l, thick + 16)
       g.fillStyle(0xffffff, 0.95)
-      g.fillRect(l, BEAM_BAND.top + 10, r - l, BEAM_BAND.bottom - BEAM_BAND.top - 20)
+      g.fillRect(l, y0 + thick * 0.3, r - l, thick * 0.4)
     }
   }
 
   private updateHud(): void {
     const L = this.logic
     const inGame = L.phase === 'playing' || L.phase === 'countdown' || L.phase === 'paused'
+    const g = this.hudPlates
+    g.clear()
     L.players.forEach((p, i) => {
+      const t = this.hud[i]
+      if (!t) return
       const hearts = '♥'.repeat(Math.max(0, p.lives)) + '♡'.repeat(Math.max(0, LIVES - p.lives))
       const name = this.versus ? `${this.players[i].name} ` : ''
-      this.hud[i]?.setText(inGame ? `${name}${Math.round(p.score)}  ${hearts}` : '')
+      const score = Math.round(p.score)
+      t.setText(inGame ? `${name}${score}  ${hearts}` : '')
+      if (!inGame) return
+      // A dark plate behind each score, edged in the player's colour.
+      const w = t.width + 44
+      hudPlate(
+        g,
+        i === 0 ? 24 : W - 154 - w,
+        14,
+        w,
+        60,
+        this.versus ? hex(this.players[i].color) : 0x6bd0ff
+      )
+      // The number jumps when a star is caught (not on every survival point).
+      if (this.shownScores[i] !== undefined && score - this.shownScores[i] >= 20) {
+        this.tweens.killTweensOf(t)
+        t.setScale(1.25)
+        this.tweens.add({ targets: t, scale: 1, duration: 220, ease: 'back.out' })
+      }
+      this.shownScores[i] = score
     })
     this.timeText.setText(inGame ? `${(L.elapsed / 1000).toFixed(0)}s` : '')
+    if (inGame) hudPlate(g, W / 2 - this.timeText.width / 2 - 24, 14, this.timeText.width + 48, 60)
   }
 
   private makeTextures(): void {
-    for (const p of this.players) {
-      const key = `avatar-${p.slot}`
-      if (this.textures.exists(key)) continue
-      const g = this.make.graphics({}, false)
-      const w = AVATAR.width
-      const h = AVATAR.standing
-      g.fillStyle(hex(p.color), 1)
-      g.fillRoundedRect(0, 0, w, h, 30)
-      g.fillStyle(0xffffff, 1)
-      g.fillCircle(w * 0.32, 38, 10)
-      g.fillCircle(w * 0.68, 38, 10)
-      g.fillStyle(0x0b1020, 1)
-      g.fillCircle(w * 0.34, 40, 5)
-      g.fillCircle(w * 0.7, 40, 5)
-      g.lineStyle(4, 0xffffff, 0.6)
-      g.strokeRoundedRect(2, 2, w - 4, h - 4, 28)
-      g.generateTexture(key, w, h)
-      g.destroy()
-    }
     if (!this.textures.exists('meteor')) {
       const g = this.make.graphics({}, false)
       g.fillStyle(0x7a5c48, 1)
@@ -479,19 +544,6 @@ export class MeteorDodgeScene extends Phaser.Scene {
       g.generateTexture('star', 56, 56)
       g.destroy()
     }
-  }
-
-  private drawBackground(): void {
-    const g = this.add.graphics().setDepth(0)
-    g.fillGradientStyle(0x050816, 0x050816, 0x1b2a5a, 0x1b2a5a, 1, 1, 1, 1)
-    g.fillRect(0, 0, W, H)
-    g.fillStyle(0xffffff, 0.8)
-    for (let i = 0; i < 90; i++)
-      g.fillCircle(Math.random() * W, Math.random() * GROUND_Y, Math.random() * 1.8)
-    g.fillStyle(0x2c3b2f, 1)
-    g.fillRect(0, GROUND_Y, W, H - GROUND_Y)
-    g.fillStyle(0x3d5240, 1)
-    g.fillRect(0, GROUND_Y, W, 8)
   }
 }
 

@@ -1,36 +1,44 @@
 /**
  * Meteor Dodge rules (no Phaser), so they can be unit-tested.
- * Lean to move, crouch to duck under beams, dodge meteors, catch stars.
- * Units: game pixels on a 1280x720 field; time in ms.
+ * Played over the camera view: the player's own body in the picture is what
+ * gets hit. Step aside to dodge meteors, duck under beams, touch stars.
+ * Units: game pixels on a 1280x720 field (the camera frame); time in ms.
  */
 export type Phase = 'menu' | 'countdown' | 'playing' | 'paused' | 'gameover'
 
 export const FIELD = { width: 1280, height: 720 }
-export const GROUND_Y = 640
-export const AVATAR = { width: 70, standing: 150, crouched: 70 }
+/** A player's body before the camera has seen them: half width and top of the head. */
+export const DEFAULT_BODY = { half: 70, top: 230 }
 export const COUNTDOWN_MS = 3000
 export const LIVES = 3
 /** After a hit, a player can't be hit again for this long. */
 export const INVULNERABLE_MS = 1500
-/** A full lean value (1) is not needed to reach the edge: this much lean is enough. */
-const LEAN_FOR_EDGE = 0.8
-/** Fastest an avatar can move, px/s. */
-const MAX_SPEED = 1600
+/** The body box follows the player with this much smoothing (ms), to steady camera jitter. */
+const FOLLOW_MS = 70
+/** Meteors start this long above the frame, so a marker can show where they will fall. */
+export const METEOR_LEAD_MS = 700
+/** Share of meteors aimed straight at a player; the rest fall around them. */
+const AIMED = 0.5
 const STAR_POINTS = 50
 const POINTS_PER_SECOND = 10
 /** Beam warning before it starts sweeping. */
 export const BEAM_WARNING_MS = 1000
-/** Beam height band: at head height of a standing avatar, above a crouched one. */
-export const BEAM_BAND = { top: GROUND_Y - 135, bottom: GROUND_Y - 95 }
 
+/** Where a player's body is in the frame this moment. */
 export interface PlayerInput {
-  /** -1 (full lean left) .. +1 (full lean right), player space. */
-  lean: number
+  /** Centre of the body across the frame. */
+  x: number
+  /** Top of the head. */
+  top: number
+  /** Half the body's width. */
+  half: number
   crouching: boolean
 }
 
 export interface Avatar {
   x: number
+  top: number
+  half: number
   crouching: boolean
   lives: number
   score: number
@@ -110,6 +118,8 @@ export class MeteorDodgeLogic {
     const spread = count > 1 ? [0.3, 0.7] : [0.5]
     this.players = spread.map((f) => ({
       x: FIELD.width * f,
+      top: DEFAULT_BODY.top,
+      half: DEFAULT_BODY.half,
       crouching: false,
       lives: LIVES,
       score: 0,
@@ -151,13 +161,14 @@ export class MeteorDodgeLogic {
     this.setPhase('menu', now)
   }
 
-  update(now: number, inputs: PlayerInput[]): GameEvent[] {
+  /** `inputs[i]` is null while player i isn't seen: their body stays where it was. */
+  update(now: number, inputs: (PlayerInput | null)[]): GameEvent[] {
     const events: GameEvent[] = []
     const dt = Math.min(now - this.lastUpdate, 100)
     this.lastUpdate = now
     if (this.phase === 'countdown' && now - this.phaseStart >= COUNTDOWN_MS)
       this.setPhase('playing', now)
-    // Avatars follow the players even before play starts, so they can try the controls.
+    // The body boxes follow the players even before play starts.
     this.moveAvatars(dt, inputs)
     if (this.phase !== 'playing') return events
 
@@ -178,37 +189,52 @@ export class MeteorDodgeLogic {
     return events
   }
 
-  private moveAvatars(dt: number, inputs: PlayerInput[]): void {
-    const half = AVATAR.width / 2
+  private moveAvatars(dt: number, inputs: (PlayerInput | null)[]): void {
+    const k = 1 - Math.exp(-dt / FOLLOW_MS)
     this.players.forEach((p, i) => {
       const input = inputs[i]
       if (!input || !p.alive) return
-      const t = Math.max(-1, Math.min(1, input.lean / LEAN_FOR_EDGE))
-      const target = FIELD.width / 2 + t * (FIELD.width / 2 - half - 20)
-      const step = (MAX_SPEED * dt) / 1000
-      p.x += Math.max(-step, Math.min(step, target - p.x))
+      p.x += (input.x - p.x) * k
+      p.top += (input.top - p.top) * k
+      p.half += (input.half - p.half) * k
       p.crouching = input.crouching
     })
   }
 
+  /** The player the next object is thrown at: one of those still in the game. */
+  private target(): Avatar {
+    const alive = this.players.filter((p) => p.alive)
+    const from = alive.length ? alive : this.players
+    return from[Math.min(from.length - 1, Math.floor(this.random() * from.length))]
+  }
+
   private spawn(now: number, k: number): void {
     while (this.elapsedMs >= this.nextMeteor) {
-      const r = 26 + this.random() * 22
+      // Sized to the player, and dropped on or around them so there is always something to dodge.
+      const p = this.target()
+      const scale = Math.max(0.6, Math.min(1.5, p.half / DEFAULT_BODY.half))
+      const r = (26 + this.random() * 22) * scale
+      const spread = this.random() < AIMED ? p.half : p.half * 4.5
+      const x = p.x + (this.random() * 2 - 1) * spread
+      const vy = 170 + 150 * k + this.random() * 50
       this.meteors.push({
         id: this.nextId++,
-        x: r + this.random() * (FIELD.width - 2 * r),
-        y: -r,
+        x: Math.max(r, Math.min(FIELD.width - r, x)),
+        y: -r - (vy * METEOR_LEAD_MS) / 1000,
         r,
-        vy: 260 + 260 * k + this.random() * 80
+        vy
       })
-      this.nextMeteor += 1100 - 650 * k
+      this.nextMeteor += 1300 - 600 * k
     }
     while (this.elapsedMs >= this.nextStar) {
+      // Stars fall a step or a reach away from a player.
+      const p = this.target()
+      const x = p.x + (this.random() * 2 - 1) * p.half * 3.5
       this.stars.push({
         id: this.nextId++,
-        x: 60 + this.random() * (FIELD.width - 120),
+        x: Math.max(60, Math.min(FIELD.width - 60, x)),
         y: -20,
-        vy: 200
+        vy: 160
       })
       this.nextStar += 3500
     }
@@ -232,22 +258,16 @@ export class MeteorDodgeLogic {
     for (const m of this.meteors) m.y += m.vy * s
     for (const st of this.stars) st.y += st.vy * s
     for (const b of this.beams) if (now - b.warnedAt >= BEAM_WARNING_MS) b.x += b.dir * b.speed * s
-    this.meteors = this.meteors.filter((m) => m.y - m.r < GROUND_Y)
-    this.stars = this.stars.filter((st) => st.y < GROUND_Y)
+    this.meteors = this.meteors.filter((m) => m.y - m.r < FIELD.height)
+    this.stars = this.stars.filter((st) => st.y < FIELD.height)
     this.beams = this.beams.filter((b) =>
       b.dir === 1 ? b.x - b.length < FIELD.width : b.x + b.length > 0
     )
   }
 
-  /** Avatar body as a rectangle (shorter while crouching). */
+  /** The player's body as a rectangle: from the top of the head down out of the frame. */
   static body(p: Avatar): { left: number; right: number; top: number; bottom: number } {
-    const h = p.crouching ? AVATAR.crouched : AVATAR.standing
-    return {
-      left: p.x - AVATAR.width / 2,
-      right: p.x + AVATAR.width / 2,
-      top: GROUND_Y - h,
-      bottom: GROUND_Y
-    }
+    return { left: p.x - p.half, right: p.x + p.half, top: p.top, bottom: FIELD.height }
   }
 
   private collide(now: number, events: GameEvent[]): void {
@@ -272,9 +292,8 @@ export class MeteorDodgeLogic {
       const beam = this.beams.find((b) => {
         if (now - b.warnedAt < BEAM_WARNING_MS) return false
         const [l, r] = b.dir === 1 ? [b.x - b.length, b.x] : [b.x, b.x + b.length]
-        const overlapsX = r > box.left && l < box.right
-        const overlapsY = box.top < BEAM_BAND.bottom && box.bottom > BEAM_BAND.top
-        return overlapsX && overlapsY
+        // Beams sweep at head height: ducking gets under them.
+        return r > box.left && l < box.right && !p.crouching
       })
       if (!meteor && !beam) return
       if (meteor) this.meteors = this.meteors.filter((m) => m !== meteor)

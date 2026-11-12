@@ -5,9 +5,10 @@ import { distToSegment } from '../geometry'
  * Fruit Chop rules, independent of Phaser so they can be unit-tested.
  * Units are game pixels on a 1280x720 field; time is in ms.
  *
- * Fruit is tossed up from below in waves and falls back down. Chop it with a
+ * Fruit is tossed up from below, and lobbed in from the left and right edges,
+ * in waves; it arcs through the air and falls. Chop it with a
  * fast hand before it drops out of the bottom.
- * - Solo: 3 lives. A dropped fruit or a chopped bomb costs one. No time limit.
+ * - Solo: 5 lives. A dropped fruit or a chopped bomb costs one. No time limit.
  * - Versus: 60 seconds on a shared field. A chopped bomb costs points.
  */
 export type Phase = 'menu' | 'countdown' | 'playing' | 'paused' | 'gameover'
@@ -93,9 +94,29 @@ export interface UpdateResult {
 }
 
 export const FIELD = { width: 1280, height: 720 }
+
+/**
+ * Where fruit should fly so a player can reach it, in game pixels. Over the
+ * camera view this follows the player's body; `scale` is their size in the
+ * picture relative to a typical one, and sizes fruit and chop speed to match.
+ */
+export interface PlayArea {
+  x0: number
+  x1: number
+  top: number
+  bottom: number
+  scale: number
+}
+export const DEFAULT_AREA: PlayArea = {
+  x0: FIELD.width * 0.12,
+  x1: FIELD.width * 0.88,
+  top: FIELD.height * 0.22,
+  bottom: FIELD.height * 0.75,
+  scale: 1
+}
 export const COUNTDOWN_MS = 3_000
 export const VERSUS_MS = 60_000
-export const LIVES = 3
+export const LIVES = 5
 export const GRAVITY = 950
 /** Radius of the blade's striking point. */
 export const BLADE_RADIUS = 34
@@ -109,6 +130,10 @@ export const STAR_POINTS = 50
 export const COMBO_MIN = 3
 export const COMBO_POINTS = 10
 export const BOMB_PENALTY = 50
+/** Share of items that fly in from the sides rather than up from below. */
+export const SIDE_CHANCE = 0.4
+/** Fastest an item may travel sideways (px/s), so it can still be followed and hit. */
+const MAX_SIDEWAYS = 900
 /** No bombs this early, so new players learn to chop first. */
 const BOMB_FREE_MS = 8_000
 /** Difficulty reaches its maximum after this much play. */
@@ -125,6 +150,8 @@ export class FruitChopLogic {
   lives = LIVES
   pauseReason: 'player' | 'out-of-view' | null = null
   items: Item[] = []
+  /** One per player (see PlayArea). Fruit is aimed at one of them, picked at random. */
+  areas: PlayArea[] = [DEFAULT_AREA]
 
   private phaseStart = 0
   private elapsedMs = 0 // playing time only (pauses don't count)
@@ -163,7 +190,12 @@ export class FruitChopLogic {
 
   /** Whether a hand is currently moving fast enough to chop (for blade feedback). */
   isArmed(player: number, hand: Side, now: number): boolean {
-    return this.speed(`${player}:${hand}`, now) >= MIN_CHOP_SPEED
+    return this.speed(`${player}:${hand}`, now) >= this.minSpeed(player)
+  }
+
+  /** A player further from the camera is smaller in the picture, so their hand covers fewer pixels. */
+  private minSpeed(player: number): number {
+    return MIN_CHOP_SPEED * (this.areas[player] ?? this.areas[0]).scale
   }
 
   start(now: number, players = this.players): void {
@@ -251,21 +283,43 @@ export class FruitChopLogic {
     const bombChance = this.elapsedMs < BOMB_FREE_MS ? 0 : 0.06 + 0.1 * k
     const kind: ItemKind = roll < bombChance ? 'bomb' : roll < bombChance + 0.04 ? 'star' : 'fruit'
     const type = Math.floor(this.random() * FRUITS.length)
-    const r = kind === 'bomb' ? BOMB_R : kind === 'star' ? STAR_R : FRUITS[type].r
-    const x = FIELD.width * (0.12 + 0.76 * this.random())
-    // Peak between 22% and 55% of the way down the screen.
-    const peakY = FIELD.height * (0.22 + 0.33 * this.random())
-    const rise = FIELD.height + r - peakY
-    const vy = -Math.sqrt(2 * GRAVITY * rise)
-    // Drift towards the middle, so fruit stays in reach.
-    const towardCentre = (FIELD.width / 2 - x) / (FIELD.width / 2)
-    const vx = towardCentre * 140 + (this.random() - 0.5) * 160
+    const area = this.areas[Math.floor(this.random() * this.areas.length)] ?? DEFAULT_AREA
+    const r = (kind === 'bomb' ? BOMB_R : kind === 'star' ? STAR_R : FRUITS[type].r) * area.scale
+    // Most items come up from below; the rest are lobbed in from the left or right edge.
+    const from = this.random()
+    const side = from < SIDE_CHANCE / 2 ? -1 : from < SIDE_CHANCE ? 1 : 0
+    // Peak in the upper part of the player's reach.
+    const peakY = area.top + (area.bottom - area.top) * 0.62 * this.random()
+    // Where it should be when it peaks: somewhere the player can reach.
+    const targetX = area.x0 + (area.x1 - area.x0) * this.random()
+    let x: number
+    let y: number
+    if (side === 0) {
+      x = targetX + (this.random() - 0.5) * 240
+      y = FIELD.height + r
+    } else {
+      // Enters just off screen, below its peak, and flies across to the player.
+      y = Math.min(peakY + FIELD.height * (0.2 + 0.25 * this.random()), FIELD.height)
+      const edge = (s: number): number => (s < 0 ? -r : FIELD.width + r)
+      const reachable = (s: number): boolean =>
+        Math.abs(targetX - edge(s)) <=
+        MAX_SIDEWAYS * Math.sqrt((2 * Math.max(40, y - peakY)) / GRAVITY)
+      // Too far from that edge to arrive in time: use the nearer edge instead.
+      const nearer = Math.abs(targetX - edge(-1)) <= Math.abs(targetX - edge(1)) ? -1 : 1
+      x = edge(reachable(side) ? side : nearer)
+      // Still too far (a player right in the middle, a low peak): start lower, for a longer flight.
+      const needed = (GRAVITY * ((targetX - x) / MAX_SIDEWAYS) ** 2) / 2
+      y = Math.min(Math.max(y, peakY + needed), FIELD.height + r)
+    }
+    const vy = -Math.sqrt(2 * GRAVITY * Math.max(40, y - peakY))
+    // Sideways speed that brings it to the target just as it peaks.
+    const vx = Math.max(-MAX_SIDEWAYS, Math.min(MAX_SIDEWAYS, (targetX - x) / (-vy / GRAVITY)))
     this.items.push({
       id: this.nextId++,
       kind,
       type,
       x,
-      y: FIELD.height + r,
+      y,
       vx,
       vy: kind === 'star' ? vy * 1.08 : vy,
       r,
@@ -324,7 +378,7 @@ export class FruitChopLogic {
   private trackStrokes(now: number, hands: HandInput[], out: UpdateResult): void {
     for (const h of hands) {
       const k = key(h)
-      if (h.pos && !this.stroke.has(k) && this.speed(k, now) >= MIN_CHOP_SPEED) {
+      if (h.pos && !this.stroke.has(k) && this.speed(k, now) >= this.minSpeed(h.player)) {
         this.stroke.set(k, { count: 0, x: h.pos.x, y: h.pos.y })
         out.strokes.push({ player: h.player, hand: h.hand })
       }
@@ -336,7 +390,7 @@ export class FruitChopLogic {
     for (const h of hands) {
       const k = key(h)
       const s = this.stroke.get(k)
-      if (!s || (h.pos && this.speed(k, now) >= MIN_CHOP_SPEED)) continue
+      if (!s || (h.pos && this.speed(k, now) >= this.minSpeed(h.player))) continue
       this.stroke.delete(k)
       if (s.count >= COMBO_MIN) {
         const points = s.count * COMBO_POINTS
@@ -353,9 +407,10 @@ export class FruitChopLogic {
       const prev = this.prev.get(k) ?? cur
       if (cur) this.prev.set(k, cur)
       else this.prev.delete(k)
-      if (!cur || !prev || this.speed(k, now) < MIN_CHOP_SPEED) continue
+      if (!cur || !prev || this.speed(k, now) < this.minSpeed(h.player)) continue
       // Test the whole path since the last update, so fast chops still connect.
-      const hit = this.items.filter((it) => distToSegment(it, prev, cur) <= it.r + BLADE_RADIUS)
+      const reach = BLADE_RADIUS * (this.areas[h.player] ?? this.areas[0]).scale
+      const hit = this.items.filter((it) => distToSegment(it, prev, cur) <= it.r + reach)
       if (!hit.length) continue
       const p = h.player
       const angle = Math.atan2(cur.y - prev.y, cur.x - prev.x)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { measureBody } from '../src/renderer/src/input/body'
-import { CursorTracker, playMap, zoneMap } from '../src/renderer/src/input/cursor'
+import { CursorTracker, ViewTracker, zoneMap } from '../src/renderer/src/input/cursor'
 import { DwellSelector } from '../src/renderer/src/input/dwell'
 import { MotionInput } from '../src/renderer/src/input/MotionInput'
 import { OneEuroFilter } from '../src/renderer/src/input/oneEuro'
@@ -321,38 +321,31 @@ describe('cursors', () => {
     expect(br.y).toBeCloseTo(1)
   })
 
-  it('game mapping is a mirror: centred on the body, even both ways, and unclamped', () => {
-    const body = measureBody(synthFrame({}, 0).pose, [], ASPECT)!
-    const sw = body.shoulderWidth
-    const mid = body.shoulderMid
-    const at = (dx: number): { x: number; y: number } => ({ x: mid.x + dx * sw, y: mid.y })
-    expect(playMap('left', at(0), body).x).toBeCloseTo(0.5)
-    // A hand in front of its own shoulder is on its own side of the screen.
-    expect(playMap('left', body.leftShoulder, body).x).toBeLessThan(0.5)
-    expect(playMap('right', body.rightShoulder, body).x).toBeGreaterThan(0.5)
-    // The same hand travel moves the same distance on screen in both directions.
-    const l = playMap('left', at(-1), body).x
-    const r = playMap('left', at(1), body).x
-    expect(0.5 - l).toBeCloseTo(r - 0.5)
-    // Arm's length (0.5 + 1.2 shoulder widths from the centre) is the screen edge; further is off screen.
-    expect(playMap('left', at(-1.7), body).x).toBeCloseTo(0)
-    expect(playMap('left', at(-2.2), body).x).toBeLessThan(0)
-  })
-
-  it('keeps the game position moving past the screen edge', () => {
-    const tracker = new CursorTracker('right')
+  it('tracks a hand where it is in the picture, even lowered or past the edge', () => {
+    const view = new ViewTracker('right')
+    // Arm hanging down: no menu cursor, but the hand still has a place in the picture.
+    const down = synthFrame({}, 0)
+    view.update(measureBody(down.pose, [], ASPECT), ASPECT, 0)
+    expect(new CursorTracker('right').update(measureBody(down.pose, [], ASPECT), 0)).toBeNull()
+    expect(view.predict(0)).not.toBeNull()
+    // The hand at a known point: player-space x is the picture's x times its aspect.
+    view.reset()
     let t = 0
-    let last = 0
-    for (let i = 0; i < 40; i++, t += 33.3) {
-      const f = synthFrame({ rightWrist: { x: 1.0 + i * 0.03, y: 0.35 } }, t)
-      tracker.update(measureBody(f.pose, [], ASPECT), t)
-      const c = tracker.predict(t)
-      if (!c?.play) continue
-      expect(c.play.x).toBeGreaterThanOrEqual(last)
-      last = c.play.x
-      expect(c.x).toBeLessThanOrEqual(1)
+    for (let i = 0; i < 20; i++, t += 33.3) {
+      const f = synthFrame({ rightWrist: { x: 1.2, y: 0.35 } }, t)
+      view.update(measureBody(f.pose, [], ASPECT), ASPECT, t)
     }
-    expect(last).toBeGreaterThan(1)
+    const p = view.predict(t)!
+    expect(p.x).toBeCloseTo(1.2 / ASPECT, 1)
+    expect(p.y).toBeCloseTo(0.35, 1)
+    // Not clamped: a hand carried past the edge keeps going.
+    for (let i = 0; i < 30; i++, t += 33.3) {
+      const f = synthFrame({ rightWrist: { x: 1.2 + i * 0.04, y: 0.35 } }, t)
+      view.update(measureBody(f.pose, [], ASPECT), ASPECT, t)
+    }
+    expect(view.predict(t)!.x).toBeGreaterThan(1)
+    view.update(null, ASPECT, t)
+    expect(view.predict(t)).toBeNull()
   })
 
   it('hides a cursor while the arm hangs down, shows it when raised', () => {
