@@ -187,6 +187,39 @@ const ART: Record<string, Art> = {
     g.lineBetween(x + w * 0.95, y + h * 0.04, x + w * 0.84, y + h * 0.2)
     g.fillStyle(0xb5651d, 1)
     g.fillRoundedRect(x + w * 0.72, y + h * 0.14, 46 * s, 30 * s, 8 * s)
+  },
+  bowling: (g, x, y, w, h) => {
+    gradient(g, x, y, w, h, 0x160f33, 0x43206b)
+    const s = Math.min(w, h) / 240
+    // A lane running away to the pins.
+    g.fillStyle(0xd9a55b, 1)
+    g.fillTriangle(x + w * 0.2, y + h, x + w * 0.8, y + h, x + w * 0.6, y + h * 0.12)
+    g.fillTriangle(x + w * 0.2, y + h, x + w * 0.6, y + h * 0.12, x + w * 0.4, y + h * 0.12)
+    // Pins: back row first.
+    const rows: [number, number[]][] = [
+      [0.2, [-1.5, -0.5, 0.5, 1.5]],
+      [0.26, [-1, 0, 1]],
+      [0.32, [-0.5, 0.5]],
+      [0.38, [0]]
+    ]
+    for (const [fy, across] of rows) {
+      for (const a of across) {
+        const px = x + w * 0.5 + a * 20 * s
+        const py = y + h * fy
+        g.fillStyle(0xffffff, 1)
+        g.fillEllipse(px, py, 13 * s, 24 * s)
+        g.fillCircle(px, py - 15 * s, 5 * s)
+        g.fillStyle(0xd62839, 1)
+        g.fillRect(px - 4 * s, py - 11 * s, 8 * s, 3 * s)
+      }
+    }
+    // The ball on its way.
+    g.fillStyle(0x3ddad7, 1)
+    g.fillCircle(x + w * 0.56, y + h * 0.68, 26 * s)
+    g.fillStyle(0x160f33, 1)
+    g.fillCircle(x + w * 0.56 - 7 * s, y + h * 0.68 - 9 * s, 3.5 * s)
+    g.fillCircle(x + w * 0.56 + 6 * s, y + h * 0.68 - 10 * s, 3.5 * s)
+    g.fillCircle(x + w * 0.56, y + h * 0.68 - 1 * s, 3.5 * s)
   }
 }
 

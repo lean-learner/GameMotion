@@ -17,7 +17,7 @@ const body = { x: 640, y: 300, sw: 180, hands: { left: null, right: null }, crou
 
 describe('Whack-a-Mole holes', () => {
   it('has the agreed numbers', () => {
-    expect(ROUND_MS).toBe(60_000)
+    expect(ROUND_MS).toBe(75_000)
     expect(UP_MS).toEqual([1700, 900])
     expect(GAP_MS).toEqual([1100, 480])
     expect(RISE_MS).toBe(220)

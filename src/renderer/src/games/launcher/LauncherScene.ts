@@ -21,7 +21,7 @@ const H = 720
 const LEFT = 0.04
 const GAP = 0.025
 /** Tiles per row in the games and players rows. */
-const PER_ROW = 4
+const PER_ROW = 5
 const TILE_W = (1 - 2 * LEFT - (PER_ROW - 1) * GAP) / PER_ROW
 /** Vertical gap between the rows of game tiles (0..1 of the height). */
 const ROW_GAP = 0.04

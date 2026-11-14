@@ -4,9 +4,13 @@ import {
   allowedHoles,
   COMBO_BONUS,
   COMBO_CAP,
+  DECOY_CHANCE,
+  DECOY_PENALTY,
   GAP_MS,
   GOLD_CHANCE,
   holeSpot,
+  levelAt,
+  LEVELS,
   MAX_UP,
   POINTS,
   RISE_MS,
@@ -18,7 +22,7 @@ import {
 } from './holes'
 export * from './holes'
 
-/** Whack-a-Mole rules (no Phaser), so they can be unit-tested. Moles pop out of holes to the left, right and below each player, never above. Whack one with a hand before it goes back down; golden moles are worth more. */
+/** Whack-a-Mole rules (no Phaser), so they can be unit-tested. Moles pop out of holes to the left, right and below each player, never above. Whack one with a hand before it goes back down; golden moles are worth more. Five levels, each faster; from level 2 hedgehogs pop up too and must be left alone. */
 export class WhackMoleLogic {
   readonly flow = new RoundFlow()
   players: Whacker[] = []
@@ -26,6 +30,7 @@ export class WhackMoleLogic {
   bodies: (BodyInput | null)[] = [] // where each player was last seen
   private nextPopAt = 0
   private nextId = 1
+  private lastLevel = 1
   constructor(private readonly random: () => number = Math.random) {}
 
   /** Prepare the game with the given number of players. */
@@ -35,7 +40,8 @@ export class WhackMoleLogic {
       combo: 0,
       bestCombo: 0,
       hits: 0,
-      misses: 0
+      misses: 0,
+      ouches: 0
     }))
     this.bodies = Array.from({ length: count }, () => null)
   }
@@ -45,6 +51,7 @@ export class WhackMoleLogic {
     this.prepare(count)
     this.moles = []
     this.nextPopAt = 600
+    this.lastLevel = 1
     this.flow.start(now)
   }
 
@@ -63,9 +70,9 @@ export class WhackMoleLogic {
     return Math.max(0, ROUND_MS - this.flow.elapsed)
   }
 
-  /** Calculate the progress of the round. */
-  private k(): number {
-    return Math.min(1, this.flow.elapsed / ROUND_MS)
+  /** The current level, 1 to LEVELS. */
+  level(): number {
+    return levelAt(this.flow.elapsed)
   }
 
   /** Get the position of a mole. */
@@ -93,12 +100,22 @@ export class WhackMoleLogic {
     if (this.flow.tick(now) <= 0) return events
     const t = this.flow.elapsed
 
-    // Pop moles
+    const level = this.level()
+    if (level > this.lastLevel) {
+      this.lastLevel = level
+      events.push({ type: 'level', level })
+    }
+
+    // Pop moles; speed and hedgehogs go by the level the pop falls in.
     while (t >= this.nextPopAt) {
-      const k = this.k()
+      const popLevel = levelAt(this.nextPopAt)
+      const k = (popLevel - 1) / (LEVELS - 1)
       const upMs = UP_MS[0] + (UP_MS[1] - UP_MS[0]) * k
       if (this.nextPopAt + upMs < ROUND_MS) {
-        const gold = this.random() < GOLD_CHANCE
+        // One roll decides the kind: low is golden, high is a hedgehog.
+        const roll = this.random()
+        const gold = roll < GOLD_CHANCE
+        const decoy = !gold && roll >= 1 - DECOY_CHANCE[popLevel - 1]
         for (let player = 0; player < this.players.length; player++) {
           const mine = this.moles.filter((m) => m.player === player)
           if (mine.length >= MAX_UP) continue
@@ -113,11 +130,12 @@ export class WhackMoleLogic {
             edge: hole.edge,
             lane: hole.lane,
             gold,
+            decoy,
             from: this.nextPopAt,
             leaves: this.nextPopAt + upMs,
             armed: false
           })
-          events.push({ type: 'pop', player, gold })
+          events.push(decoy ? { type: 'peek', player } : { type: 'pop', player, gold })
         }
       }
       this.nextPopAt += GAP_MS[0] + (GAP_MS[1] - GAP_MS[0]) * k
@@ -138,6 +156,14 @@ export class WhackMoleLogic {
       // A hand parked on the hole does not count: it has to arrive.
       if (!touching) mole.armed = true
       if (touching && spot && mole.armed) {
+        if (mole.decoy) {
+          const points = Math.min(p.score, DECOY_PENALTY)
+          p.score -= points
+          p.combo = 0
+          p.ouches++
+          events.push({ type: 'ouch', player: mole.player, points, x: spot.x, y: spot.y })
+          return false
+        }
         const points =
           (mole.gold ? POINTS.gold : POINTS.mole) + COMBO_BONUS * Math.min(p.combo, COMBO_CAP)
         p.score += points
@@ -155,6 +181,8 @@ export class WhackMoleLogic {
         return false
       }
       if (t > mole.leaves) {
+        // A hedgehog left alone just goes away.
+        if (mole.decoy) return false
         p.combo = 0
         p.misses++
         events.push({ type: 'miss', player: mole.player, x: spot?.x ?? 0, y: spot?.y ?? 0 })

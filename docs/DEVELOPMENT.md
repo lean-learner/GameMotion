@@ -543,12 +543,24 @@ The rules, each in its own `logic.ts` with unit tests:
   fly's spot (not wait there) within the hit window; within 110 ms of the beat is perfect.
   With two players, inward flies go overhead so nobody punches into the other, and both
   landing the same beat pays a bonus.
-- **Whack-a-Mole** (`games/whackMole/`): 60 seconds. Each player has six holes, measured
+- **Whack-a-Mole** (`games/whackMole/`): 75 seconds in five 15-second levels. Each player has six holes, measured
   from the shoulders: two to the left, two to the right and two below at hip height, never
-  above. A mole stays up 1.7 seconds at the start and 0.9 at the end, and a new one pops
-  every 1.1 falling to 0.48 seconds, at most three per player. A hand must arrive on the
+  above. A mole stays up 1.7 seconds on level 1 and 0.9 on level 5, and a new one pops
+  every 1.1 falling to 0.48 seconds, stepping down level by level, at most three per
+  player. From level 2 some pops are **hedgehogs** (12 %, 18 %, 24 %, 30 % by level):
+  hitting one costs 100 points and the run; leaving it alone costs nothing. A hand must arrive on the
   hole (not wait there). 50 points, 150 for a golden mole, plus 5 for each whack in a row.
   With two players each keeps to their outer side and below, never the space between them.
+- **Bowling** (`games/bowling/`): ten frames with standard scoring (`scoring.ts`). The lane
+  is drawn in perspective over the camera view (`view.ts`), one in the middle or one each
+  for two players, who bowl at their own pace. The ball starts under where the player
+  stands. A throw is a hand that is down (0.9 shoulder widths below the shoulders) and
+  comes up past 0.3 within 650 ms (`swing.ts`): upward speed sets the power (2 to 7
+  shoulder widths a second gives 5 to 9.5 m/s), and a sideways lean sets the direction
+  plus a hook that curves the ball back late, more on slow balls. Pins are simulated from
+  above as circles (`physics.ts`): the ball deflects, pins slide into each other, a ball
+  off the edge is a gutter ball. The pocket (about 5 cm either side of the head pin)
+  strikes; dead centre leaves splits.
 
 The speed and timing numbers above were chosen by reasoning, not yet tuned with real
 players in front of a camera.

@@ -5,8 +5,8 @@ import type { BodyInput } from '../poses'
 import type { RoundFlow } from '../roundFlow'
 import type { Sfx } from '../sfx'
 import type { GameServices } from '../types'
-import { allowedHoles, holeSpot, WhackMoleLogic, type GameEvent } from './logic'
-import { drawHole, drawMole } from './moleArt'
+import { allowedHoles, FRAME, holeSpot, LEVELS, WhackMoleLogic, type GameEvent } from './logic'
+import { drawHedgehog, drawHole, drawMole } from './moleArt'
 
 /** The surround: a garden, with molehills and tufts of grass. */
 const GARDEN: StageTheme = {
@@ -29,7 +29,7 @@ const GARDEN: StageTheme = {
 }
 const MALLET = 0xb5651d
 
-/** Whack-a-Mole, played over the camera view: moles pop out of holes to the left, right and below each player; whack them with a hand. Rules live in WhackMoleLogic. */
+/** Whack-a-Mole, played over the camera view: moles pop out of holes to the left, right and below each player; whack them with a hand, but not the hedgehogs. Five levels, each faster. Rules live in WhackMoleLogic. */
 export class WhackMoleScene extends CameraGameScene {
   private readonly logic = new WhackMoleLogic()
   private inputs: (BodyInput | null)[] = []
@@ -43,8 +43,8 @@ export class WhackMoleScene extends CameraGameScene {
       title: 'Whack-a-Mole',
       theme: GARDEN,
       help: [
-        'Moles pop up beside and below you  ·  Whack each one before it hides',
-        'Golden moles are worth more  ·  Whacks in a row build a bonus'
+        'Whack each mole before it hides  ·  Golden moles are worth more',
+        'Five levels, faster each time  ·  Leave the hedgehogs alone'
       ]
     })
   }
@@ -76,13 +76,14 @@ export class WhackMoleScene extends CameraGameScene {
   }
 
   protected centreLine(): string {
-    return `${Math.ceil(this.logic.remaining() / 1000)}s`
+    return `Level ${this.logic.level()}/${LEVELS}  ·  ${Math.ceil(this.logic.remaining() / 1000)}s`
   }
 
   protected resultLine(): string {
     const line = (i: number): string => {
       const p = this.logic.players[i]
-      return `${p.score} points  ·  ${p.hits} moles  ·  best run ${p.bestCombo}`
+      const hogs = p.ouches > 0 ? `  ·  ${p.ouches} hedgehog${p.ouches > 1 ? 's' : ''} hit` : ''
+      return `${p.score} points  ·  ${p.hits} moles  ·  best run ${p.bestCombo}${hogs}`
     }
     if (!this.duo) return line(0)
     return this.players.map((p, i) => `${p.name}: ${line(i)}`).join('\n')
@@ -116,6 +117,30 @@ export class WhackMoleScene extends CameraGameScene {
           e.gold ? 40 : 34
         )
         break
+      case 'peek':
+        this.sfx.note(196, 0.12)
+        break
+      case 'ouch':
+        this.sfx.buzz()
+        this.splats.push({
+          x: e.x,
+          y: e.y,
+          r: (this.inputs[e.player]?.sw ?? 170) * 0.5,
+          at: now,
+          color: 0xe63946
+        })
+        this.floatText(e.x, e.y - 30, e.points > 0 ? `Ouch! -${e.points}` : 'Ouch!', '#ff6b6b', 38)
+        break
+      case 'level':
+        this.sfx.chime()
+        this.floatText(
+          FRAME.width / 2,
+          FRAME.height * 0.42,
+          e.level === LEVELS ? 'Final level!' : `Level ${e.level}`,
+          '#f4e285',
+          72
+        )
+        break
       case 'miss':
         this.floatText(e.x, e.y - 20, 'Too slow', '#c9c9c9', 26)
         break
@@ -137,7 +162,9 @@ export class WhackMoleScene extends CameraGameScene {
     })
     for (const mole of this.logic.moles) {
       const spot = this.logic.spot(mole)
-      if (spot) drawMole(g, spot, mole.edge, this.logic.shown(mole), mole.gold)
+      if (!spot) continue
+      if (mole.decoy) drawHedgehog(g, spot, mole.edge, this.logic.shown(mole))
+      else drawMole(g, spot, mole.edge, this.logic.shown(mole), mole.gold)
     }
 
     // A ring bursting out where a mole was whacked.

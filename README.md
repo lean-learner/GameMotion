@@ -20,7 +20,8 @@ never leaves it, and the games work with the internet switched off.
 | 🪞 **Mirror Duel**  | A pose appears on a card. First to copy it scores.                                     |
 | 🕺 **Freeze Dance** | Green light: dance as hard as you can. Red light: freeze, or lose a life.              |
 | 🥊 **Punch Fly**    | Flies buzz in on the beat. Punch each one as it arrives.                               |
-| 🔨 **Whack-a-Mole** | Moles pop up to your left, right and below. Whack each one before it hides.            |
+| 🔨 **Whack-a-Mole** | Whack each mole before it hides. Five levels, each faster. Don't hit the hedgehogs!    |
+| 🎳 **Bowling**      | Stand where the ball should start, then swing an arm up to bowl. Ten frames.           |
 
 Every game is played **over your own camera picture**, so you see yourself in the
 middle of the action. One or two people can play, and the app keeps top scores for up

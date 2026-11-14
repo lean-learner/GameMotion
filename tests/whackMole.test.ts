@@ -244,8 +244,10 @@ describe('Whack-a-Mole rules', () => {
     expect([...seen[0]].sort()).toEqual(['bottom', 'left'])
     expect([...seen[1]].sort()).toEqual(['bottom', 'right'])
     // Player 1 whacks one; player 2 does not: player 1 leads.
-    const a = until(g, t, both, () => g.moles.some((m) => m.player === 0 && g.shown(m) > 0))
-    const mole = g.moles.find((m) => m.player === 0)!
+    // (A real mole: by now hedgehogs pop up too.)
+    const real = (m: Mole): boolean => m.player === 0 && !m.decoy && g.shown(m) > 0
+    const a = until(g, t, both, () => g.moles.some(real))
+    const mole = g.moles.find(real)!
     const before = g.scores()[0]
     g.update(a.t + 16, [handOn(g, mole, 350), standing(930)])
     expect(g.scores()[0]).toBeGreaterThan(before)
