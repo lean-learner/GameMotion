@@ -16,6 +16,7 @@ import { humanBridge } from './games/humanBridge'
 import { meteorDodge } from './games/meteorDodge'
 import { mirrorDuel } from './games/mirrorDuel'
 import { punchFly } from './games/punchFly'
+import { whackMole } from './games/whackMole'
 import { mountLauncher } from './games/launcher'
 import { mountReachSetup } from './games/reachSetup'
 import { validReach } from './input/reach'
@@ -113,7 +114,8 @@ const GAMES: GameModule[] = [
   humanBridge,
   mirrorDuel,
   freezeDance,
-  punchFly
+  punchFly,
+  whackMole
 ]
 /** Running in a browser (the web version) rather than the desktop app. */
 const IS_WEB = window.gameMotion.platform === 'web'

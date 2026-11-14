@@ -76,6 +76,8 @@ export interface Button {
   sub?: string
   /** Hold time for this button, if different from the others. */
   dwellMs?: number
+  /** Only a closed fist presses this button (see DwellTarget.fistOnly). */
+  fistOnly?: boolean
   /** Tiles only: picture drawn behind the caption, inside the given pixel rectangle. */
   art?: (g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number) => void
   /** Tiles only: a coloured badge (e.g. a player's colour) before the label. */

@@ -1,6 +1,7 @@
 import type Phaser from 'phaser'
 import { drawFigure } from '../poseArt'
 import type { Button } from '../ui'
+import { drawMole } from '../whackMole/moleArt'
 
 type Art = NonNullable<Button['art']>
 type G = Phaser.GameObjects.Graphics
@@ -165,6 +166,27 @@ const ART: Record<string, Art> = {
     g.fillCircle(x + w * 0.7, y + h * 0.36, 11 * s)
     g.fillStyle(0xffffff, 0.3)
     g.fillCircle(x + w * 0.75, y + h * 0.22, 8 * s)
+  },
+  'whack-mole': (g, x, y, w, h) => {
+    gradient(g, x, y, w, h, 0x3b2a1a, 0x8fbf5a)
+    const s = Math.min(w, h) / 240
+    // Holes on the left, the right and at the bottom; a mole is out of two of them.
+    const holes: [number, number, boolean][] = [
+      [0.2, 0.34, true],
+      [0.8, 0.3, false],
+      [0.5, 0.62, true]
+    ]
+    for (const [fx, fy, up] of holes) {
+      const spot = { x: x + w * fx, y: y + h * fy, r: 30 * s }
+      g.fillStyle(0x2b1a0e, 0.85)
+      g.fillEllipse(spot.x, spot.y, spot.r * 2, spot.r * 1.5)
+      if (up) drawMole(g, spot, 'bottom', 1, fx === 0.5)
+    }
+    // A mallet coming down on the empty hole.
+    g.lineStyle(7 * s, 0xe9d8a6, 1)
+    g.lineBetween(x + w * 0.95, y + h * 0.04, x + w * 0.84, y + h * 0.2)
+    g.fillStyle(0xb5651d, 1)
+    g.fillRoundedRect(x + w * 0.72, y + h * 0.14, 46 * s, 30 * s, 8 * s)
   }
 }
 

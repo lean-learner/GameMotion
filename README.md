@@ -20,6 +20,7 @@ never leaves it, and the games work with the internet switched off.
 | 🪞 **Mirror Duel**  | A pose appears on a card. First to copy it scores.                                     |
 | 🕺 **Freeze Dance** | Green light: dance as hard as you can. Red light: freeze, or lose a life.              |
 | 🥊 **Punch Fly**    | Flies buzz in on the beat. Punch each one as it arrives.                               |
+| 🔨 **Whack-a-Mole** | Moles pop up to your left, right and below. Whack each one before it hides.            |
 
 Every game is played **over your own camera picture**, so you see yourself in the
 middle of the action. One or two people can play, and the app keeps top scores for up
@@ -73,8 +74,8 @@ troubleshooting.
 1. Put the webcam at about chest height and **stand 2 to 3 metres back**, until your
    head and shoulders are in the picture.
 2. **Raise a hand.** A cursor appears and follows it.
-3. **Point at a game and hold still.** A ring fills up, then it starts. Making a fist
-   fills the ring faster.
+3. **Point at a game and close your hand into a fist.** Hold it for a moment: the tile
+   fills up, then the game starts. Open your hand to cancel.
 4. Have fun, and maybe move the coffee table first.
 
 Handy keys: **Esc** goes back (and leaves full screen from the main menu), **F11**

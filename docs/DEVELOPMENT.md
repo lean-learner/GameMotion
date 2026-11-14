@@ -336,7 +336,7 @@ to a corner preview so players can check their framing.
 ## Milestone 4: Platform
 
 **Start-up:** `npm start` (or the AppImage) opens straight into the **launcher** and starts
-tracking. Everything in the launcher works by hand cursor (hold 1 s) or mouse click:
+tracking. Everything in the launcher works by hand cursor (hold 1.5 s; games need a closed fist) or mouse click:
 
 - **Who is playing?** Four colour-coded player slots. The selected one is highlighted
   and remembered.
@@ -441,17 +441,22 @@ A to press). Exit sits top-right and needs a longer hold.
 ### Selecting: hover timer, fist is faster
 
 Tiles and buttons are pressed by holding the cursor on them: hovering always starts a
-timer that fills on the tile (1 s; Exit 2 s, in-game pause 1.5 s), and the tile is
-selected when it completes. Nothing is selected without the timer. Closing the hand into
+timer that fills on the tile (launcher 1.5 s; Exit 2 s, in-game pause 1.5 s, other menus
+1 s), and the tile is selected when it completes. Nothing is selected without the timer. Closing the hand into
 a **fist** fills the same timer twice as fast (`FIST_SPEED` in `input/dwell.ts`). A fist
 is "at least 3 of 4 fingertips no further from the wrist than their middle joints", held
 for 2 tracking frames (`isFist` in `input/body.ts`). After a press the cursor must leave
 the tile before it can press again.
 
+**Game tiles are fist-only** (`fistOnly` on the target): an open hand only highlights the
+tile. A closed fist fills the timer at normal speed (1.5 s, `GAME_DWELL_MS`), and opening
+the hand drains it twice as fast (`OPEN_DRAIN`), so a wrong pick is cancelled by letting
+go. Mouse, keyboard and gamepad still start a game directly.
+
 ### Wording and flow
 
 Player-facing text is short and action-first ("Step in front of the camera", "Point at a
-tile and hold · Make a fist to go faster"). The launcher's hint line shows the one thing
+game · Close your fist and hold to start"). The launcher's hint line shows the one thing
 to do next, including camera problems. Each game's first screen has three short lines
 and a reminder of how to choose; Pause and Game over go straight **Home**. The app opens
 in **full screen** by default (Settings → "Open in full screen" turns it off; data files
@@ -538,6 +543,12 @@ The rules, each in its own `logic.ts` with unit tests:
   fly's spot (not wait there) within the hit window; within 110 ms of the beat is perfect.
   With two players, inward flies go overhead so nobody punches into the other, and both
   landing the same beat pays a bonus.
+- **Whack-a-Mole** (`games/whackMole/`): 60 seconds. Each player has six holes, measured
+  from the shoulders: two to the left, two to the right and two below at hip height, never
+  above. A mole stays up 1.7 seconds at the start and 0.9 at the end, and a new one pops
+  every 1.1 falling to 0.48 seconds, at most three per player. A hand must arrive on the
+  hole (not wait there). 50 points, 150 for a golden mole, plus 5 for each whack in a row.
+  With two players each keeps to their outer side and below, never the space between them.
 
 The speed and timing numbers above were chosen by reasoning, not yet tuned with real
 players in front of a camera.

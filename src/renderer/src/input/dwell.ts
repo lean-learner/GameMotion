@@ -9,6 +9,8 @@ export interface DwellTarget {
   h: number
   /** Hold time for this target, if different from the selector's. */
   dwellMs?: number
+  /** Only a closed fist fills this target's timer; an open hand drains it. */
+  fistOnly?: boolean
 }
 
 export interface DwellState {
@@ -21,11 +23,15 @@ export interface DwellState {
 /** A closed fist fills the timer this many times faster than an open hand. */
 export const FIST_SPEED = 2
 
+/** On a fist-only target, an open hand empties the timer this many times faster than a fist fills it. */
+export const OPEN_DRAIN = 2
+
 /**
  * "Hover to press": a cursor resting on a target starts a timer, shown filling
  * on the target, and selects it when the timer completes (`dwellMs`). Nothing
  * is ever selected without the timer. Closing the hand into a fist while
- * hovering fills the same timer faster.
+ * hovering fills the same timer faster. Targets marked `fistOnly` are filled only by a
+ * closed fist (at normal speed), and opening the hand drains the timer.
  *
  * After a selection the cursor must leave the target before it can select again.
  */
@@ -61,7 +67,12 @@ export class DwellSelector {
     if (this.current?.id !== hit.id) this.current = { id: hit.id, filledMs: 0, last: t }
     const cur = this.current
     const step = Math.max(t - cur.last, 0)
-    cur.filledMs += step * (fist ? FIST_SPEED : 1)
+    if (hit.fistOnly) {
+      // A fist fills at normal speed (no FIST_SPEED bonus); anything else drains.
+      cur.filledMs = fist ? cur.filledMs + step : Math.max(0, cur.filledMs - step * OPEN_DRAIN)
+    } else {
+      cur.filledMs += step * (fist ? FIST_SPEED : 1)
+    }
     cur.last = t
     const progress = Math.min(1, cur.filledMs / (hit.dwellMs ?? this.dwellMs))
     if (progress >= 1) {

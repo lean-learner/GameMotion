@@ -19,10 +19,14 @@ const W = 1280
 const H = 720
 /** Left edge of every row, and the gap between tiles (0..1 of the width). */
 const LEFT = 0.04
-const GAP = 0.0125
+const GAP = 0.025
 /** Tiles per row in the games and players rows. */
 const PER_ROW = 4
 const TILE_W = (1 - 2 * LEFT - (PER_ROW - 1) * GAP) / PER_ROW
+/** Vertical gap between the rows of game tiles (0..1 of the height). */
+const ROW_GAP = 0.04
+/** A game starts after a closed fist is held on its tile this long. */
+const GAME_DWELL_MS = 1500
 
 type Direction = 'left' | 'right' | 'up' | 'down'
 
@@ -66,6 +70,7 @@ export function nextTile(
  * The start screen, laid out like a console dashboard: a row of game tiles,
  * a row of players, and a row of options. Everything is operated by holding a
  * hand cursor on a tile (a fist is faster), by mouse, by arrow keys + Enter, or by a gamepad.
+ * A game tile starts only while the hand is closed into a fist.
  */
 export class LauncherScene extends Phaser.Scene {
   private tiles!: DwellButtons
@@ -112,7 +117,7 @@ export class LauncherScene extends Phaser.Scene {
     this.hint = this.add
       .text(W * LEFT, H * 0.955, '', { fontFamily: FONT, fontSize: '21px', color: THEME.textDim })
       .setOrigin(0, 0.5)
-    this.tiles = new DwellButtons(this, { dwellMs: 1000, fontSize: 30, tile: true })
+    this.tiles = new DwellButtons(this, { dwellMs: 1500, fontSize: 30, tile: true })
     this.cursors = new CursorLayer(this, 30)
 
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
@@ -197,7 +202,7 @@ export class LauncherScene extends Phaser.Scene {
     }
     if (this.usedKeys) return 'Arrows to move  ·  Enter to select'
     return anyCursor
-      ? 'Point at a tile and hold  ·  Make a fist to go faster'
+      ? 'Point at a game  ·  Close your fist and hold to start'
       : 'Raise a hand to point'
   }
 
@@ -245,11 +250,10 @@ export class LauncherScene extends Phaser.Scene {
 
     // Games: big picture tiles.
     // As many rows as the games need, sharing the height one row used to have.
-    const gamesY = 0.18
-    const gamesH = two ? 0.24 : 0.33
+    const gamesY = 0.16
+    const gamesH = two ? 0.34 : 0.44
     const gameRows = Math.max(1, Math.ceil(this.services.games.length / PER_ROW))
-    const rowGap = GAP * (W / H)
-    const tileH = (gamesH - (gameRows - 1) * rowGap) / gameRows
+    const tileH = (gamesH - (gameRows - 1) * ROW_GAP) / gameRows
     this.label(two ? 'Games · 2 players' : 'Games', gamesY - 0.035)
     const games: Button[] = this.services.games.map((g, i) => {
       const best = this.services.topScores(tableFor(g.id, count))[0]
@@ -258,20 +262,22 @@ export class LauncherScene extends Phaser.Scene {
         label: g.title,
         sub: best ? `Best ${best.score} · ${best.name}` : 'No score yet',
         x: column(i % PER_ROW),
-        y: gamesY + Math.floor(i / PER_ROW) * (tileH + rowGap),
+        y: gamesY + Math.floor(i / PER_ROW) * (tileH + ROW_GAP),
         w: TILE_W,
         h: tileH,
-        art: tileArt(g.id)
+        art: tileArt(g.id),
+        fistOnly: true,
+        dwellMs: GAME_DWELL_MS
       }
     })
 
     // Players: one row in 1-player mode; left and right rows in 2-player mode.
     const rows: { side: 'left' | 'right'; title: string; y: number; h: number }[] = two
       ? [
-          { side: 'left', title: 'Left player', y: 0.485, h: 0.1 },
-          { side: 'right', title: 'Right player', y: 0.645, h: 0.1 }
+          { side: 'left', title: 'Left player', y: 0.565, h: 0.075 },
+          { side: 'right', title: 'Right player', y: 0.695, h: 0.075 }
         ]
-      : [{ side: 'left', title: "Who's playing?", y: 0.59, h: 0.14 }]
+      : [{ side: 'left', title: "Who's playing?", y: 0.67, h: 0.1 }]
     const players: Button[] = rows.flatMap((row) => {
       this.label(row.title, row.y - 0.035)
       const current = chosen[row.side === 'left' ? 0 : 1]
@@ -288,18 +294,18 @@ export class LauncherScene extends Phaser.Scene {
     })
 
     // Options along the bottom.
-    const y = 0.795
-    const h = 0.115
+    const y = 0.81
+    const h = 0.1
     const options: Button[] = [
       { id: 'mode-1', label: '1 player', x: LEFT, y, w: 0.14, h, selected: count === 1 },
-      { id: 'mode-2', label: '2 players', x: 0.1925, y, w: 0.14, h, selected: count === 2 },
+      { id: 'mode-2', label: '2 players', x: 0.205, y, w: 0.14, h, selected: count === 2 },
       {
         id: 'reach',
         label: 'Reach setup',
         sub: 'put every tile in easy reach',
-        x: 0.365,
+        x: 0.37,
         y,
-        w: 0.22,
+        w: 0.2025,
         h
       },
       { id: 'settings', label: 'Settings', x: 0.5975, y, w: 0.16, h }
