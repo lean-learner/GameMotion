@@ -11,6 +11,8 @@ export interface StageTheme {
   bottom: number
   /** Frame and highlight colour. */
   accent: number
+  /** Optional camera dimming for games that need a clear view of the player. */
+  cameraDim?: number
   /** Small picture repeated over the surround, drawn around (x, y) at scale s. */
   motif: (g: Phaser.GameObjects.Graphics, x: number, y: number, s: number, index: number) => void
 }
@@ -43,7 +45,10 @@ export class CameraStage {
     titleText: string
   ) {
     fillScreen(scene)
-    scene.add.rectangle(0, 0, W, H, 0x000000, DIM).setOrigin(0).setDepth(0)
+    scene.add
+      .rectangle(0, 0, W, H, 0x000000, theme.cameraDim ?? DIM)
+      .setOrigin(0)
+      .setDepth(0)
     this.glow = scene.add.rectangle(0, 0, W, H, 0xffffff, 1).setOrigin(0).setDepth(1).setAlpha(0)
     this.decor = scene.add.graphics().setDepth(40)
     this.frame = scene.add.graphics().setDepth(41)

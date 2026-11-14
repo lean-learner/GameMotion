@@ -1,14 +1,14 @@
 import type { GameModule } from '../types'
 
-/** Meteor Dodge. Phaser and the scene load only when the game starts. */
-export const meteorDodge: GameModule = {
-  id: 'meteor-dodge',
-  title: 'Meteor Dodge',
+/** Obstacle Run. Phaser and the scene load only when the game starts. */
+export const obstacleRun: GameModule = {
+  id: 'obstacle-run',
+  title: 'Obstacle Run',
   cameraView: true,
   async mount(parent, services, options = {}) {
-    const [{ default: Phaser }, { MeteorDodgeScene }, { Sfx }] = await Promise.all([
+    const [{ default: Phaser }, { ObstacleRunScene }, { Sfx }] = await Promise.all([
       import('phaser'),
-      import('./MeteorDodgeScene'),
+      import('./ObstacleRunScene'),
       import('../sfx')
     ])
     const sfx = new Sfx()
@@ -24,7 +24,7 @@ export const meteorDodge: GameModule = {
         width: parent.clientWidth || 1280,
         height: parent.clientHeight || 720
       },
-      scene: new MeteorDodgeScene(services, sfx, options.autostart ?? false)
+      scene: new ObstacleRunScene(services, sfx, options.autostart ?? false)
     })
     return () => {
       game.destroy(true)

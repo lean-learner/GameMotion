@@ -1,6 +1,8 @@
 import type Phaser from 'phaser'
 import { drawFigure } from '../poseArt'
 import type { Button } from '../ui'
+import { drawBasket, drawItem } from '../skyCatch/art'
+import { drawFootball } from '../goalkeeper/art'
 import { drawMole } from '../whackMole/moleArt'
 
 type Art = NonNullable<Button['art']>
@@ -56,31 +58,83 @@ const ART: Record<string, Art> = {
     balloon(0.52, 0.26, 36, 0xffe14d)
     balloon(0.78, 0.4, 28, 0x4dd17a)
   },
-  'meteor-dodge': (g, x, y, w, h) => {
-    gradient(g, x, y, w, h, 0x050816, 0x1b2a5a)
-    const s = Math.min(w, h) / 240
-    g.fillStyle(0xffffff, 0.8)
-    for (let i = 0; i < 14; i++) {
-      // Fixed pseudo-random star positions, so they don't flicker between frames.
-      g.fillCircle(x + w * ((i * 0.37) % 1), y + h * 0.6 * ((i * 0.61) % 1), 1.6 * s)
+  'obstacle-run': (g, x, y, w, h) => {
+    gradient(g, x, y, w, h, 0x1d1a3a, 0xc2542d)
+    // A small three-lane track, seen from where the runner stands.
+    const cx = x + w / 2
+    const at = (lane: number, s: number): { x: number; y: number } => ({
+      x: cx + lane * w * 0.3 * s,
+      y: y + h * (0.04 + 0.52 * s)
+    })
+    for (const edge of [-1.5, -0.5, 0.5, 1.5]) {
+      const far = at(edge, 0.15)
+      const near = at(edge, 1)
+      g.lineStyle(Math.abs(edge) > 1 ? 3 : 2, 0xffffff, Math.abs(edge) > 1 ? 0.8 : 0.45)
+      g.lineBetween(far.x, far.y, near.x, near.y)
     }
-    const meteor = (mx: number, my: number, r: number): void => {
-      const cx = x + w * mx
-      const cy = y + h * my
-      g.lineStyle(r * s * 0.9, 0xffb347, 0.55)
-      g.lineBetween(cx, cy, cx + 46 * s, cy - 60 * s)
-      g.fillStyle(0x7a5c48, 1)
-      g.fillCircle(cx, cy, r * s)
-      g.fillStyle(0x5a4234, 1)
-      g.fillCircle(cx - r * s * 0.3, cy + r * s * 0.2, r * s * 0.35)
+    // A hurdle further off.
+    const hl = at(-1.5, 0.5)
+    const hr = at(1.5, 0.5)
+    for (let i = 0; i < 7; i++) {
+      g.fillStyle(i % 2 ? 0xffffff : 0xe63946, 1)
+      g.fillRect(
+        hl.x + ((hr.x - hl.x) * i) / 7,
+        hl.y - h * 0.08,
+        (hr.x - hl.x) / 7 + 0.5,
+        h * 0.035
+      )
     }
-    meteor(0.3, 0.3, 20)
-    meteor(0.68, 0.42, 26)
-    // The player, leaning out of the way.
-    g.fillStyle(0x4da3ff, 1)
-    g.fillCircle(x + w * 0.46, y + h * 0.56, 11 * s)
-    g.fillRect(x + w * 0.46 - 9 * s, y + h * 0.56 + 11 * s, 18 * s, 22 * s)
+    g.lineStyle(2, 0xffffff, 1)
+    g.lineBetween(hl.x, hl.y - h * 0.08, hl.x, hl.y)
+    g.lineBetween(hr.x, hr.y - h * 0.08, hr.x, hr.y)
+    // A crate up close in one lane, a coin in another.
+    const c = at(-1, 0.9)
+    const cw = w * 0.2
+    g.fillStyle(0xb5651d, 1)
+    g.fillRect(c.x - cw / 2, c.y - cw * 0.8, cw, cw * 0.8)
+    g.lineStyle(3, 0x5a2f0c, 1)
+    g.strokeRect(c.x - cw / 2, c.y - cw * 0.8, cw, cw * 0.8)
+    g.lineBetween(c.x - cw / 2, c.y - cw * 0.8, c.x + cw / 2, c.y)
+    g.lineBetween(c.x + cw / 2, c.y - cw * 0.8, c.x - cw / 2, c.y)
+    const coin = at(1, 0.85)
+    g.fillStyle(0xffe14d, 1)
+    g.fillCircle(coin.x, coin.y - h * 0.1, w * 0.05)
+    g.lineStyle(2, 0xb8860b, 1)
+    g.strokeCircle(coin.x, coin.y - h * 0.1, w * 0.033)
   },
+  'jump-rope': (g, x, y, w, h) => {
+    gradient(g, x, y, w, h, 0x14324a, 0x2a9d8f)
+    const s = Math.min(w, h) / 240
+    const cx = x + w / 2
+    const rope = (cy: number, width: number, color: number, alpha: number): void => {
+      g.lineStyle(width * s, color, alpha)
+      let px = x + w * 0.1
+      let py = y + h * 0.35
+      for (let i = 1; i <= 16; i++) {
+        const t = i / 16
+        const nx = x + w * (0.1 + 0.8 * t)
+        const ny =
+          (1 - t) * (1 - t) * (y + h * 0.35) + 2 * t * (1 - t) * cy + t * t * (y + h * 0.35)
+        g.lineBetween(px, py, nx, ny)
+        px = nx
+        py = ny
+      }
+    }
+    rope(y - h * 0.25, 3, 0xffffff, 0.45)
+    drawFigure(g, cx, y + h * 0.26, 20 * s, 'hands-up', { color: 0xffffff })
+    rope(y + h * 0.8, 6, 0xff7eb6, 1)
+  },
+  'sky-catch': (g, x, y, w, h) => {
+    gradient(g, x, y, w, h, 0x1c4e80, 0x3a7d44)
+    const s = Math.min(w, h) / 240
+    const item = (kind: 'fruit' | 'gold' | 'bomb', ix: number, iy: number, look = 0): void =>
+      drawItem(g, { kind, x: x + w * ix, y: y + h * iy, r: 22 * s, vx: 0, look })
+    item('fruit', 0.2, 0.2)
+    item('bomb', 0.8, 0.22)
+    item('gold', 0.5, 0.16)
+    drawBasket(g, x + w * 0.5, y + h * 0.42, 70 * s, 0xffd166)
+  },
+
   'human-bridge': (g, x, y, w, h) => {
     gradient(g, x, y, w, h, 0x5b2a86, 0xff8a3d)
     const s = Math.min(w, h) / 240
@@ -188,6 +242,20 @@ const ART: Record<string, Art> = {
     g.fillStyle(0xb5651d, 1)
     g.fillRoundedRect(x + w * 0.72, y + h * 0.14, 46 * s, 30 * s, 8 * s)
   },
+  goalkeeper: (g, x, y, w, h) => {
+    gradient(g, x, y, w, h, 0x071d29, 0x17623b)
+    const s = Math.min(w, h) / 240
+    g.lineStyle(4 * s, 0xffffff, 1)
+    g.strokeRect(x + w * 0.12, y + h * 0.12, w * 0.76, h * 0.65)
+    g.lineStyle(1, 0xffffff, 0.3)
+    for (let i = 1; i < 6; i++) {
+      const px = x + w * (0.12 + (i * 0.76) / 6)
+      g.lineBetween(px, y + h * 0.12, px, y + h * 0.77)
+    }
+    drawFootball(g, x + w * 0.65, y + h * 0.4, 33 * s)
+    drawFigure(g, x + w * 0.35, y + h * 0.48, 26 * s, 'hands-up', { color: 0xa5f56b })
+  },
+
   bowling: (g, x, y, w, h) => {
     gradient(g, x, y, w, h, 0x160f33, 0x43206b)
     const s = Math.min(w, h) / 240

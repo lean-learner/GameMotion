@@ -14,6 +14,7 @@ import {
   type CursorDraw
 } from '../ui'
 import { tileArt } from './tileArt'
+import { gamePage } from './paging'
 
 const W = 1280
 const H = 720
@@ -79,6 +80,7 @@ export class LauncherScene extends Phaser.Scene {
   private clock!: Phaser.GameObjects.Text
   private labels: Phaser.GameObjects.Text[] = []
   private dirty = true
+  private page = 0
   private switching = false
   /** Gamepad buttons held on the previous frame, to act once per press. */
   private padHeld = new Set<string>()
@@ -207,7 +209,10 @@ export class LauncherScene extends Phaser.Scene {
   }
 
   private act(id: string): void {
-    if (id === 'mode-1' || id === 'mode-2') {
+    if (id === 'page-next') {
+      this.page++
+      this.dirty = true
+    } else if (id === 'mode-1' || id === 'mode-2') {
       this.switching = true
       void this.services
         .setPlayerCount(id === 'mode-1' ? 1 : 2)
@@ -249,13 +254,15 @@ export class LauncherScene extends Phaser.Scene {
     const column = (i: number): number => LEFT + i * (TILE_W + GAP)
 
     // Games: big picture tiles.
-    // As many rows as the games need, sharing the height one row used to have.
+    // Keep two rows and wide gaps, even as more games are added.
+    const page = gamePage(this.services.games, this.page)
+    this.page = page.page
     const gamesY = 0.16
     const gamesH = two ? 0.34 : 0.44
-    const gameRows = Math.max(1, Math.ceil(this.services.games.length / PER_ROW))
+    const gameRows = Math.max(1, Math.ceil(Math.min(10, this.services.games.length) / PER_ROW))
     const tileH = (gamesH - (gameRows - 1) * ROW_GAP) / gameRows
     this.label(two ? 'Games · 2 players' : 'Games', gamesY - 0.035)
-    const games: Button[] = this.services.games.map((g, i) => {
+    const games: Button[] = page.games.map((g, i) => {
       const best = this.services.topScores(tableFor(g.id, count))[0]
       return {
         id: `game-${g.id}`,
@@ -270,6 +277,16 @@ export class LauncherScene extends Phaser.Scene {
         dwellMs: GAME_DWELL_MS
       }
     })
+    if (page.pages > 1)
+      games.push({
+        id: 'page-next',
+        label: 'More games',
+        sub: `Page ${page.page + 1} of ${page.pages}`,
+        x: column(4),
+        y: gamesY + tileH + ROW_GAP,
+        w: TILE_W,
+        h: tileH
+      })
 
     // Players: one row in 1-player mode; left and right rows in 2-player mode.
     const rows: { side: 'left' | 'right'; title: string; y: number; h: number }[] = two

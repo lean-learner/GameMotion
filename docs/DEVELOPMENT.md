@@ -417,18 +417,6 @@ left (8 s each; in 2-player mode both players at once). The area their hands cov
 reach zone. It's saved per player slot and used whenever that player plays
 (`input/reach.ts`, `games/reachSetup/`).
 
-### Meteor Dodge (second game)
-
-Played over the camera view: **your own body in the picture is the target**. **Step
-aside** to dodge falling meteors (a marker at the top shows where each will come down),
-**duck** under laser beams (a flashing stripe at head height warns 1 s ahead), and touch
-stars (+50). 3 lives. Points accrue for every second survived, and it speeds up over
-90 s. A soft outline shows what counts as you (from `services.input.body`); meteors and
-stars are sized to you and fall on or around you, wherever you stand. Ducking uses the
-upper-body crouch detector, so it works with the C270's narrow view. Versus: both
-players share the frame; the higher score wins. Scores go to `meteor-dodge` /
-`meteor-dodge-2p`. Hands are only used for menus and the pause button.
-
 ### Console-style launcher
 
 The launcher is a dashboard of rounded tiles in a dark, green-accented palette
@@ -464,7 +452,7 @@ from before this default are switched over once).
 
 ### Games over the camera view
 
-Fruit Chop, Balloon Pop and Meteor Dodge are played over the player's own camera picture: you see
+Every game is played over the player's own camera picture: you see
 yourself, mirrored, and the fruit or balloons fly through the same frame
 (`GameModule.cameraView`, `games/cameraStage.ts`).
 
@@ -503,7 +491,7 @@ after a fresh build was intermittently pausing games.
 
 All five planned milestones are built, plus the extras above. Still needed with real
 players: chop feel and speed (`MIN_POP_SPEED`, `MIN_CHOP_SPEED`), Fruit Chop
-and Meteor Dodge difficulty, Versus framing with
+difficulty, the jump and duck thresholds in `games/vertical.ts`, Versus framing with
 two people on the C270, and Full vs Heavy pose models.
 
 ## License
@@ -561,6 +549,53 @@ The rules, each in its own `logic.ts` with unit tests:
   above as circles (`physics.ts`): the ball deflects, pins slide into each other, a ball
   off the edge is a gutter ball. The pocket (about 5 cm either side of the head pin)
   strikes; dead centre leaves splits.
+
+- **Goalkeeper** (`games/goalkeeper/`): five 15-second levels. Each goal is anchored to
+  the player's starting shoulders and fitted inside their half of the frame; moving
+  does not move the goal. The same shot offsets and flight times face both players.
+  Hands within 0.45 shoulder widths or the torso can save, with a 150 ms early tracking
+  window. Saves earn 50 plus a capped streak bonus; three goals end that player's run,
+  while the opponent can continue. Flights fall from 1.6 to 0.8 seconds, curve from
+  level 3, and arrive in pairs from level 4. The final flights resolve before the round
+  ends. Geometry and rules are Phaser-free and tested separately from the scene.
+- **Target Shooting** (`games/shooting/`): not in the launcher. The owner found it too
+  easy; the code and its tests are kept but it is left out of `GAMES` in `main.ts`.
+- **Jumping and ducking** (`games/vertical.ts`): the three games below share one
+  detector that needs no calibration step. It learns the standing shoulder height
+  (following slow drift, and taking a new height held steady for 3 s as standing). The
+  shoulders 0.25 shoulder widths above it is a jump (landing below 0.12); 0.45 below it
+  is a duck (up again above 0.25). A shrug or raised arms stays under the jump line.
+- **Obstacle Run** (`games/obstacleRun/`): five 18-second levels on a three-lane track
+  laid around where the player stood at the start (lanes 1.4 shoulder widths wide, kept
+  inside the player's part of the frame). Rows come down the track in 2.4 s falling to
+  1.35 s, 1.9 s apart falling to 1.0 s. Crates block one lane, or two from level 2, and
+  are aimed at a lane someone is standing in three times out of four; the free lane is
+  never more than one step from a lane that was free in the row before. Hurdles need
+  the player off the ground between 260 ms before and 120 ms after they arrive; beams
+  (from level 2) need a duck between 200 ms before and 120 ms after. Rows less than
+  1.4 s apart never ask for a jump straight after a duck or the reverse. Changing lane
+  needs the shoulders 0.62 lane widths from the old lane's middle. Each row passed is
+  10 points plus a streak bonus, coins 25, each heart left at the end 50; three hits end
+  a run. Both players face the same rows.
+- **Jump Rope** (`games/jumpRope/`): one rope swings across the whole frame for one or
+  two players. Be off the ground between 240 ms before and 120 ms after it sweeps under
+  the feet. A turn takes 1.5 s at level 1 and 12% less each level (ten turns a level),
+  down to 0.56 s; from level 3 one turn in five is 40% slower and one in five 20%
+  quicker, so the rope has to be watched. A trip costs a heart and delays the next
+  sweep by 0.9 s. There is no time limit: the round ends when everyone has tripped
+  three times. Each jump is 10 points plus the current run, capped at 20.
+- **Sky Catch** (`games/skyCatch/`): five 15-second levels. Something drops every 1.5 s
+  falling to 0.78 s and takes 2.3 s falling to 1.3 s to reach the basket, a box at the
+  chest 1.3 shoulder widths wide. Each fruit lands 22% to 60% of the field's width from
+  the last one, so the player is always moving. Bombs are 10% of drops rising to 32%,
+  and half of them fall where the last fruit did; catching one costs a heart, three end
+  a run. Dropped fruit resets the streak. From level 2 a comet crosses at head height
+  every 8 s; it is caught by being off the ground as it passes over (60 points). Both
+  players get the same drops in their own halves.
+
+The launcher keeps its large tiles and two rows. With more than ten games, it shows
+nine games per page and a normal dwell tile for **More games**, wrapping to the first
+page. Mouse, keyboard and gamepad selection use the same tiles as hand selection.
 
 The speed and timing numbers above were chosen by reasoning, not yet tuned with real
 players in front of a camera.

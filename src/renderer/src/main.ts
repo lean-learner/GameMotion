@@ -13,11 +13,14 @@ import { balloonPop } from './games/balloonPop'
 import { freezeDance } from './games/freezeDance'
 import { fruitChop } from './games/fruitChop'
 import { humanBridge } from './games/humanBridge'
-import { meteorDodge } from './games/meteorDodge'
 import { mirrorDuel } from './games/mirrorDuel'
 import { punchFly } from './games/punchFly'
 import { whackMole } from './games/whackMole'
 import { bowling } from './games/bowling'
+import { goalkeeper } from './games/goalkeeper'
+import { obstacleRun } from './games/obstacleRun'
+import { jumpRope } from './games/jumpRope'
+import { skyCatch } from './games/skyCatch'
 import { mountLauncher } from './games/launcher'
 import { mountReachSetup } from './games/reachSetup'
 import { validReach } from './input/reach'
@@ -111,13 +114,16 @@ let rafHandle: number | null = null
 const GAMES: GameModule[] = [
   fruitChop,
   balloonPop,
-  meteorDodge,
+  obstacleRun,
+  jumpRope,
+  skyCatch,
   humanBridge,
   mirrorDuel,
   freezeDance,
   punchFly,
   whackMole,
-  bowling
+  bowling,
+  goalkeeper
 ]
 /** Running in a browser (the web version) rather than the desktop app. */
 const IS_WEB = window.gameMotion.platform === 'web'
